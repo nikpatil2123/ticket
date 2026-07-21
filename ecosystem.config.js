@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: 'parul-ticket-backend',
-      cwd: './apps/backend',
+      cwd: './backend',
       script: 'dist/main.js',
       instances: 1,
       exec_mode: 'fork',
@@ -16,7 +16,7 @@ module.exports = {
     },
     {
       name: 'parul-ticket-frontend',
-      cwd: './apps/frontend',
+      cwd: './frontend',
       script: 'node_modules/next/dist/bin/next',
       args: 'start -p 3000',
       instances: 1,

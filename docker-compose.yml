@@ -23,7 +23,7 @@ services:
 
   backend:
     build:
-      context: ./apps/backend
+      context: ./backend
       dockerfile: Dockerfile
     container_name: ticket_backend
     restart: always
@@ -46,7 +46,7 @@ services:
 
   frontend:
     build:
-      context: ./apps/frontend
+      context: ./frontend
       dockerfile: Dockerfile
       args:
         - NEXT_PUBLIC_API_URL=http://localhost:3001

@@ -6,8 +6,10 @@
 .env.development.local
 .env.test.local
 .env.production.local
-apps/*/.env*
-apps/*/*.env
+backend/.env*
+backend/*.env
+frontend/.env*
+frontend/*.env
 
 # Node Dependencies
 node_modules/

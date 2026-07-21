@@ -11,7 +11,8 @@
   "license": "ISC",
   "type": "commonjs",
   "workspaces": [
-    "apps/*",
+    "backend",
+    "frontend",
     "packages/*"
   ]
 }
