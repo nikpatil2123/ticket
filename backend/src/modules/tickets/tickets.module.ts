@@ -8,12 +8,15 @@ import { Message, MessageSchema } from './schemas/message.schema';
 import { ActivityLog, ActivityLogSchema } from './schemas/activity-log.schema';
 import { AuthModule } from '../auth/auth.module';
 
+import { Attachment, AttachmentSchema } from '../email/schemas/attachment.schema';
+
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: Ticket.name, schema: TicketSchema },
       { name: Message.name, schema: MessageSchema },
       { name: ActivityLog.name, schema: ActivityLogSchema },
+      { name: Attachment.name, schema: AttachmentSchema },
     ]),
     AuthModule
   ],

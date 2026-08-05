@@ -128,6 +128,22 @@ export default function TicketTimeline({ ticketId }: { ticketId: string }) {
                   </span>
                 </div>
                 <p className="text-xs leading-relaxed whitespace-pre-wrap">{data.bodyText || data.bodyHtml}</p>
+                {data.attachments && data.attachments.length > 0 && (
+                  <div className="mt-2 space-y-1.5 border-t border-slate-200/50 pt-2">
+                    {data.attachments.map((att: any) => (
+                      <a
+                        key={att._id}
+                        href={att.driveFileLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`flex items-center gap-1.5 text-xs font-medium hover:underline w-fit ${isInbound ? 'text-blue-600' : 'text-blue-400'}`}
+                      >
+                        <Paperclip className="h-3.5 w-3.5" />
+                        {att.fileName}
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           }

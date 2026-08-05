@@ -1,10 +1,12 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { TicketsRepository } from './tickets.repository';
 import { Ticket, TicketStatus } from './schemas/ticket.schema';
 import { UpdateTicketStatusDto } from './dto/update-ticket-status.dto';
 
 @Injectable()
 export class TicketsService {
+  private readonly logger = new Logger(TicketsService.name);
+
   constructor(private readonly ticketsRepository: TicketsRepository) {}
 
   async getAllTickets(departmentId?: string): Promise<Ticket[]> {
@@ -31,8 +33,12 @@ export class TicketsService {
     return this.ticketsRepository.findTicketByThreadId(threadId);
   }
 
-  async addMessage(ticketId: string, direction: string, from: string, to: string[], subject: string, bodyText: string) {
-    return this.ticketsRepository.addMessage(ticketId, direction, from, to, subject, bodyText);
+  async findMessageByMessageId(messageId: string) {
+    return this.ticketsRepository.findMessageByMessageId(messageId);
+  }
+
+  async addMessage(ticketId: string, direction: string, from: string, to: string[], subject: string, bodyText: string, messageId?: string) {
+    return this.ticketsRepository.addMessage(ticketId, direction, from, to, subject, bodyText, messageId);
   }
 
   async logActivity(ticketId: string, actorId: string | null, action: string, changes?: any, note?: string) {
@@ -78,6 +84,10 @@ export class TicketsService {
     return updatedTicket;
   }
 
+  async updateTicketMessageId(id: string, messageId: string) {
+    return this.ticketsRepository.updateTicketMessageId(id, messageId);
+  }
+
   // Helper function to send email reliably, maintaining threads
   private async sendEmailDirectly(ticket: any, subjectPrefix: string, bodyText: string, googleAuthService: any) {
     const auth = await googleAuthService.getAuthClient();
@@ -88,24 +98,66 @@ export class TicketsService {
     const profile = await gmail.users.getProfile({ userId: 'me' });
     const fromEmail = profile.data.emailAddress;
 
+    let subject = ticket.subject || 'Support Request';
+    if (subjectPrefix && !subject.toLowerCase().startsWith('re:')) {
+      subject = `${subjectPrefix} ${subject}`;
+    }
+
+    // Ensure we have a valid RFC Message-ID for thread replies
+    let targetMessageId = ticket.messageId;
+    if ((!targetMessageId || !targetMessageId.includes('@')) && ticket.threadId) {
+      try {
+        this.logger.log(`Ticket ${ticket.ticketNumber} missing RFC Message-ID. Searching Gmail thread ${ticket.threadId}...`);
+        const threadRes = await gmail.users.threads.get({
+          userId: 'me',
+          id: ticket.threadId,
+          format: 'full'
+        });
+        const messagesInThread = threadRes.data.messages || [];
+        for (const msgItem of messagesInThread) {
+          if (msgItem.payload?.headers) {
+            const foundRfcId = msgItem.payload.headers.find((h: any) => h.name?.toLowerCase() === 'message-id')?.value;
+            if (foundRfcId && foundRfcId.includes('@')) {
+              targetMessageId = foundRfcId;
+              this.logger.log(`Found RFC Message-ID in Gmail thread: ${foundRfcId}`);
+              await this.ticketsRepository.updateTicketMessageId(ticket._id.toString(), foundRfcId);
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        this.logger.error('Failed to fetch original thread Message-ID from Gmail', e);
+      }
+    }
+
     const emailLines = [
       `From: ${fromEmail}`,
       `To: ${ticket.customerEmail}`,
-      'Content-type: text/plain;charset=utf-8',
-      'MIME-Version: 1.0',
-      `Subject: ${subjectPrefix} ${ticket.subject}`
+      `Subject: ${subject}`
     ];
 
-    if (ticket.messageId) {
-      emailLines.push(`In-Reply-To: ${ticket.messageId}`);
-      emailLines.push(`References: ${ticket.messageId}`);
+    if (targetMessageId) {
+      const formattedMessageId = targetMessageId.startsWith('<') && targetMessageId.endsWith('>') 
+        ? targetMessageId 
+        : `<${targetMessageId}>`;
+      emailLines.push(`In-Reply-To: ${formattedMessageId}`);
+      emailLines.push(`References: ${formattedMessageId}`);
+      this.logger.log(`Sending email reply with In-Reply-To: ${formattedMessageId}`);
+    } else {
+      this.logger.warn(`No RFC Message-ID found for ticket ${ticket.ticketNumber}`);
     }
 
+    emailLines.push('Content-Type: text/plain; charset=utf-8');
+    emailLines.push('MIME-Version: 1.0');
     emailLines.push('');
     emailLines.push(bodyText);
     
-    const emailStr = emailLines.join('\n');
-    const encodedEmail = Buffer.from(emailStr).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const emailStr = emailLines.join('\r\n');
+    const encodedEmail = Buffer.from(emailStr, 'utf-8')
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
 
     const requestBody: any = { raw: encodedEmail };
     if (ticket.threadId) {

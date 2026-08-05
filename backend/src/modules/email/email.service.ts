@@ -1,31 +1,87 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { google } from 'googleapis';
 import { GoogleAuthService } from '../auth/google-auth.service';
 import { AiService } from '../ai/ai.service';
 import { TicketsService } from '../tickets/tickets.service';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { Attachment } from './schemas/attachment.schema';
+import { ConfigService } from '@nestjs/config';
+import { Readable } from 'stream';
 
 @Injectable()
-export class EmailService implements OnModuleInit {
+export class EmailService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(EmailService.name);
+  private timerHandle: any = null;
 
   constructor(
     @InjectQueue('email-ingestion') private emailQueue: Queue,
     private readonly googleAuthService: GoogleAuthService,
     private readonly aiService: AiService,
-    private readonly ticketsService: TicketsService
+    private readonly ticketsService: TicketsService,
+    private readonly configService: ConfigService,
+    @InjectModel(Attachment.name) private attachmentModel: Model<Attachment>
   ) {}
+
+  private isSyncing = false;
 
   onModuleInit() {
     this.logger.log('Starting 5-second automatic email polling worker...');
-    setInterval(async () => {
+    this.timerHandle = setInterval(async () => {
+      if (this.isSyncing) return;
+      this.isSyncing = true;
       try {
         await this.syncEmails();
       } catch (error) {
         // Silently handle polling errors to keep loop running
+      } finally {
+        this.isSyncing = false;
       }
     }, 5000);
+  }
+
+  onModuleDestroy() {
+    if (this.timerHandle) {
+      clearInterval(this.timerHandle);
+      this.logger.log('Stopped automatic email polling worker.');
+    }
+  }
+
+  
+  private getAttachmentsFromParts(parts: any[]): any[] {
+    let attachments: any[] = [];
+    if (!parts) return attachments;
+    for (const part of parts) {
+      if (part.filename && part.body && part.body.attachmentId) {
+        attachments.push({
+          filename: part.filename,
+          mimeType: part.mimeType,
+          attachmentId: part.body.attachmentId,
+          size: part.body.size
+        });
+      }
+      if (part.parts) {
+        attachments.push(...this.getAttachmentsFromParts(part.parts));
+      }
+    }
+    return attachments;
+  }
+
+  private findHeaderRecursive(payload: any, headerName: string): string | undefined {
+    if (!payload) return undefined;
+    if (payload.headers && Array.isArray(payload.headers)) {
+      const found = payload.headers.find((h: any) => h.name && h.name.toLowerCase() === headerName.toLowerCase());
+      if (found?.value) return found.value;
+    }
+    if (payload.parts && Array.isArray(payload.parts)) {
+      for (const part of payload.parts) {
+        const found = this.findHeaderRecursive(part, headerName);
+        if (found) return found;
+      }
+    }
+    return undefined;
   }
 
   private cleanEmailBody(bodyText: string): string {
@@ -52,6 +108,8 @@ export class EmailService implements OnModuleInit {
     }
   }
 
+  private processedMessageIds: string[] = [];
+
   async syncEmails(): Promise<void> {
     this.logger.log('Manually syncing unread emails from Gmail...');
     try {
@@ -75,7 +133,16 @@ export class EmailService implements OnModuleInit {
 
       for (const msg of messages) {
         if (!msg.id) continue;
+        if (this.processedMessageIds.includes(msg.id)) {
+          // Gmail index hasn't updated yet, skip
+          continue;
+        }
         
+        this.processedMessageIds.push(msg.id);
+        if (this.processedMessageIds.length > 1000) {
+          this.processedMessageIds.shift();
+        }
+
         const msgRes = await gmail.users.messages.get({
           userId: 'me',
           id: msg.id,
@@ -84,11 +151,29 @@ export class EmailService implements OnModuleInit {
 
         const messageData: any = msgRes.data;
         
-        const headers: any[] = messageData.payload?.headers || [];
-        const subject = headers.find((h: any) => h.name === 'Subject')?.value || 'No Subject';
-        const from = headers.find((h: any) => h.name === 'From')?.value || 'Unknown';
-        const messageId = headers.find((h: any) => h.name === 'Message-ID' || h.name === 'Message-Id')?.value;
+        const subject = this.findHeaderRecursive(messageData.payload, 'Subject') || 'No Subject';
+        const from = this.findHeaderRecursive(messageData.payload, 'From') || 'Unknown';
+        const messageId = this.findHeaderRecursive(messageData.payload, 'Message-ID');
         const threadId = messageData.threadId;
+
+        this.logger.log(`Parsed email -> ThreadId: ${threadId} | MessageID: ${messageId} | From: ${from} | Subject: ${subject}`);
+
+        // DB-backed deduplication check
+        const existingById = await this.ticketsService.findMessageByMessageId(msg.id);
+        const existingByHeader = messageId ? await this.ticketsService.findMessageByMessageId(messageId) : null;
+        if (existingById || existingByHeader) {
+          this.logger.log(`Message ${msg.id} (Header: ${messageId}) already exists in DB. Skipping duplicate.`);
+          try {
+            await gmail.users.messages.modify({
+              userId: 'me',
+              id: msg.id,
+              requestBody: { removeLabelIds: ['UNREAD'] }
+            });
+          } catch (e) {
+            // Ignore error if marking read fails
+          }
+          continue;
+        }
         
         // Extract basic body text and clean quoted history
         let rawBodyText = messageData.snippet || '';
@@ -98,24 +183,44 @@ export class EmailService implements OnModuleInit {
 
         // Extract raw email address from "Name <email@address.com>"
         const emailRegex = /<([^>]+)>/;
-        const customerEmail = emailRegex.test(from) ? from.match(emailRegex)[1] : from;
+        const emailMatch = from ? from.match(emailRegex) : null;
+        const customerEmail = emailMatch ? emailMatch[1] : from;
 
         // Check if a ticket already exists for this Gmail thread ID
+        
+        const parts = messageData.payload?.parts || [];
+        const rawAttachments = this.getAttachmentsFromParts(parts);
+        
+        // Deduplicate attachments by attachmentId
+        const uniqueAttachments: any[] = [];
+        const seenAttIds = new Set<string>();
+        for (const att of rawAttachments) {
+          if (att.attachmentId && !seenAttIds.has(att.attachmentId)) {
+            seenAttIds.add(att.attachmentId);
+            uniqueAttachments.push(att);
+          }
+        }
+
+        const folderId = this.configService.get<string>('GOOGLE_DRIVE_FOLDER_ID') || null;
+        
         let existingTicket: any = null;
         if (threadId) {
           existingTicket = await this.ticketsService.findTicketByThreadId(threadId);
         }
 
+        let createdMessage: any = null;
+
         if (existingTicket) {
           this.logger.log(`Thread ID ${threadId} matches existing ticket TKT-${existingTicket.ticketNumber}. Appending reply...`);
           
-          await this.ticketsService.addMessage(
+          createdMessage = await this.ticketsService.addMessage(
             existingTicket._id.toString(),
             'INBOUND',
             customerEmail,
             ['support@acme.com'],
             subject,
-            bodyText
+            bodyText,
+            messageId || msg.id
           );
 
           await this.ticketsService.logActivity(
@@ -131,21 +236,72 @@ export class EmailService implements OnModuleInit {
           // Classify with AI for new ticket creation
           const aiResult = await this.aiService.classifyEmail(subject, bodyText);
 
-          const createdTicket = await this.ticketsService.createTicket({
+          const result = await this.ticketsService.createTicket({
             subject: subject,
             customerEmail: customerEmail,
             initialMessage: bodyText,
             aiClassification: aiResult,
             threadId: threadId,
-            messageId: messageId
-          });
+            messageId: messageId || msg.id
+          }) as any;
+          
+          const createdTicket = result.ticket;
+          createdMessage = result.message;
 
           // Send auto-reply with ticket number
           try {
-            await this.ticketsService.sendAutoReply((createdTicket as any)._id.toString(), this.googleAuthService);
-            this.logger.log(`Sent auto-reply for ticket ${(createdTicket as any).ticketNumber}`);
+            await this.ticketsService.sendAutoReply(createdTicket._id.toString(), this.googleAuthService);
+            this.logger.log(`Sent auto-reply for ticket ${createdTicket.ticketNumber}`);
           } catch (e) {
             this.logger.error('Failed to send auto-reply', e);
+          }
+        }
+
+        // Upload attachments to Drive and save to DB
+        if (uniqueAttachments.length > 0 && createdMessage) {
+          this.logger.log(`Found ${uniqueAttachments.length} unique attachments, uploading to Drive...`);
+          const drive = google.drive({ version: 'v3', auth });
+          
+          for (const att of uniqueAttachments) {
+            try {
+              const attRes = await gmail.users.messages.attachments.get({
+                userId: 'me',
+                messageId: msg.id,
+                id: att.attachmentId
+              });
+              
+              const buffer = Buffer.from(attRes.data.data as string, 'base64');
+              const stream = Readable.from(buffer);
+              
+              const fileMetadata: any = {
+                name: att.filename,
+              };
+              if (folderId) {
+                fileMetadata.parents = [folderId];
+              }
+              
+              const driveRes = await drive.files.create({
+                requestBody: fileMetadata,
+                media: {
+                  mimeType: att.mimeType,
+                  body: stream
+                },
+                fields: 'id, webViewLink'
+              });
+              
+              const newAttachment = new this.attachmentModel({
+                messageId: createdMessage._id,
+                fileName: att.filename,
+                mimeType: att.mimeType,
+                driveFileId: driveRes.data.id,
+                driveFileLink: driveRes.data.webViewLink,
+                size: att.size
+              });
+              await newAttachment.save();
+              this.logger.log(`Uploaded ${att.filename} to Drive.`);
+            } catch (err) {
+              this.logger.error(`Failed to upload attachment ${att.filename}`, err);
+            }
           }
         }
 
