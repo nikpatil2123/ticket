@@ -15,6 +15,13 @@ export class AiService {
   }
 
   async classifyEmail(subject: string, bodyText: string): Promise<ClassificationResultDto> {
+    const useGroq = this.configService.get<boolean>('groq.useGroq');
+
+    if (!useGroq) {
+      this.logger.log(`Groq API disabled. Using CPU for text classification: ${subject}`);
+      return this.classifyEmailCpu(subject, bodyText);
+    }
+
     try {
       this.logger.log(`Classifying email via Groq: ${subject}`);
       
@@ -24,7 +31,7 @@ export class AiService {
       
       Format required:
       {
-        "intent": string, // MUST be EXACTLY "MIS" or "LMS" based on the email content. "MIS" for management/billing/general IT, "LMS" for learning/courses/platform access.
+        "intent": string, // MUST be EXACTLY "MIS", "LMS", or "UNASSIGNED". "MIS" for management/billing/IT, "LMS" for learning/courses. "UNASSIGNED" if completely unclear.
         "confidenceScore": number, // Between 0 and 1
         "extractedEntities": object, // Any useful key-value pairs found (e.g. invoiceId, device, os)
         "tags": string[] // 1-3 useful routing tags (e.g. "urgent", "billing", "mobile")
@@ -48,15 +55,43 @@ export class AiService {
       return result;
 
     } catch (error) {
-      this.logger.error('Groq AI Classification failed. Falling back to default routing.', error);
-      
-      // Fallback Strategy: Always return a safe default instead of failing the pipeline
-      return {
-        intent: 'MIS',
-        confidenceScore: 0,
-        extractedEntities: {},
-        tags: ['unclassified']
-      };
+      this.logger.error('Groq AI Classification failed. Falling back to CPU classification.', error);
+      return this.classifyEmailCpu(subject, bodyText);
     }
+  }
+
+  private classifyEmailCpu(subject: string, bodyText: string): ClassificationResultDto {
+    const text = `${subject} ${bodyText}`.toLowerCase();
+
+    // Define keywords for LMS
+    const lmsKeywords = ['course', 'student', 'enrollment', 'moodle', 'canvas', 'blackboard', 'assignment', 'grade', 'teacher', 'module', 'learning'];
+
+    // Define keywords for MIS
+    const misKeywords = ['billing', 'invoice', 'payment', 'hardware', 'software', 'network', 'printer', 'password', 'access', 'employee', 'login'];
+
+    let lmsScore = 0;
+    let misScore = 0;
+
+    lmsKeywords.forEach(word => { if (text.includes(word)) lmsScore++; });
+    misKeywords.forEach(word => { if (text.includes(word)) misScore++; });
+
+    let intent = 'UNASSIGNED'; // Default fallback if no strong keywords
+    if (lmsScore > misScore && lmsScore > 0) {
+      intent = 'LMS';
+    } else if (misScore > lmsScore && misScore > 0) {
+      intent = 'MIS';
+    }
+
+    const tags: string[] = [];
+    if (text.includes('urgent') || text.includes('asap')) tags.push('urgent');
+    if (text.includes('billing') || text.includes('invoice')) tags.push('billing');
+    if (text.includes('password') || text.includes('login')) tags.push('account');
+
+    return {
+      intent,
+      confidenceScore: 0.8, // Static confidence for rules engine
+      extractedEntities: {},
+      tags: tags.slice(0, 3)
+    };
   }
 }

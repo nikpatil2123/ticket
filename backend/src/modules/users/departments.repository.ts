@@ -21,7 +21,7 @@ export class DepartmentsRepository {
   }
 
   async update(id: string, data: Partial<Department>): Promise<Department | null> {
-    return this.deptModel.findByIdAndUpdate(id, data, { new: true }).exec();
+    return this.deptModel.findByIdAndUpdate(id, data, { returnDocument: 'after' }).exec();
   }
 
   async delete(id: string): Promise<any> {

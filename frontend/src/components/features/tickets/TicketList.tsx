@@ -6,11 +6,11 @@ import { Search } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/api-client';
 
-export default function TicketList() {
+export default function TicketList({ tatType }: { tatType?: 'INTERNAL' | 'EXTERNAL' } = {}) {
   const { data, isLoading, error } = useQuery({
-    queryKey: ['tickets'],
+    queryKey: ['tickets', tatType],
     queryFn: async () => {
-      const response = await apiClient.get('/tickets');
+      const response = await apiClient.get('/tickets', { params: { tatType } });
       return response.data.data;
     },
     refetchInterval: 5000,
@@ -30,7 +30,7 @@ export default function TicketList() {
       <div className="p-4 border-b border-slate-200 space-y-3 bg-slate-50">
         <div className="flex justify-between items-center">
           <h2 className="font-bold text-sm text-slate-800 tracking-tight flex items-center gap-2">
-            My Queue
+            {tatType ? `${tatType.charAt(0) + tatType.slice(1).toLowerCase()} TAT Queue` : 'My Queue'}
             <span className="text-[11px] font-semibold bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">
               {data?.length || 0}
             </span>

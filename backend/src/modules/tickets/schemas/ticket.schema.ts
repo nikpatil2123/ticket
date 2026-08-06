@@ -7,6 +7,8 @@ export enum TicketStatus {
   NEW = 'NEW',
   OPEN = 'OPEN',
   PENDING_CUSTOMER = 'PENDING_CUSTOMER',
+  PENDING_APPROVAL = 'PENDING_APPROVAL',
+  PENDING_DOCUMENT_CLARIFICATION = 'PENDING_DOCUMENT_CLARIFICATION',
   IN_PROGRESS = 'IN_PROGRESS',
   RESOLVED = 'RESOLVED',
   CLOSED = 'CLOSED',
@@ -36,11 +38,14 @@ export class Ticket extends Document {
   @Prop({ type: String, enum: TicketPriority, default: TicketPriority.P3 })
   priority: TicketPriority;
 
-  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Department', required: true, index: true })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Department', index: true })
   departmentId: Department;
 
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User' })
   assignedTo: User;
+
+  @Prop({ type: String, enum: ['INTERNAL', 'EXTERNAL'], index: true })
+  tatType?: 'INTERNAL' | 'EXTERNAL';
 
   @Prop({ type: Object })
   aiClassification: {
@@ -54,6 +59,12 @@ export class Ticket extends Document {
 
   @Prop({ unique: true, sparse: true })
   threadId: string;
+
+  @Prop({ type: Date, default: null })
+  pausedAt?: Date;
+
+  @Prop({ type: Number, default: 0 })
+  totalPausedTimeMs?: number;
 
   @Prop()
   messageId: string;

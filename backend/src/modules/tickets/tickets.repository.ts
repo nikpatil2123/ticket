@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import mongoose, { Model } from 'mongoose';
 import { Ticket, TicketStatus, TicketPriority } from './schemas/ticket.schema';
 import { Message } from './schemas/message.schema';
 import { ActivityLog } from './schemas/activity-log.schema';
@@ -16,9 +16,123 @@ export class TicketsRepository {
     @InjectModel(Attachment.name) private attachmentModel: Model<Attachment>,
   ) {}
 
-  async findAll(departmentId?: string): Promise<Ticket[]> {
-    const filter = departmentId ? { departmentId } : {};
+  async findAll(departmentId?: string, tatType?: string): Promise<Ticket[]> {
+    const filter: any = {};
+    if (departmentId) filter.departmentId = departmentId;
+    if (tatType) filter.tatType = tatType;
     return this.ticketModel.find(filter).sort({ updatedAt: -1 }).populate('departmentId assignedTo').exec();
+  }
+
+  async getTicketStats(departmentId?: string): Promise<any[]> {
+    const matchStage: any = {};
+    if (departmentId) {
+      matchStage.departmentId = new mongoose.Types.ObjectId(departmentId);
+    }
+    return this.ticketModel.aggregate([
+      { $match: matchStage },
+      { $group: { _id: '$status', count: { $sum: 1 } } }
+    ]).exec();
+  }
+
+  async getAgentStats(): Promise<any[]> {
+    return this.ticketModel.db.collection('users').aggregate([
+      {
+        $lookup: {
+          from: 'tickets',
+          let: { userId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$assignedTo', '$$userId'] },
+                    { $in: ['$status', ['CLOSED', 'RESOLVED']] }
+                  ]
+                }
+              }
+            },
+            {
+              $addFields: {
+                rawResolutionTimeMs: {
+                  $subtract: [
+                    { $ifNull: ["$resolvedAt", "$updatedAt"] },
+                    "$createdAt"
+                  ]
+                }
+              }
+            },
+            {
+              $addFields: {
+                resolutionTimeMs: {
+                  $max: [
+                    0,
+                    {
+                      $subtract: [
+                        "$rawResolutionTimeMs",
+                        {
+                          $add: [
+                            { $ifNull: ["$totalPausedTimeMs", 0] },
+                            {
+                              $cond: {
+                                if: { $ne: ["$pausedAt", null] },
+                                then: { $subtract: [{ $ifNull: ["$resolvedAt", "$updatedAt"] }, "$pausedAt"] },
+                                else: 0
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          as: 'closedTickets'
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          agentName: { 
+            $trim: { 
+              input: { $concat: [{ $ifNull: ["$firstName", ""] }, " ", { $ifNull: ["$lastName", ""] }] } 
+            } 
+          },
+          agentEmail: "$email",
+          closedCount: { $size: "$closedTickets" },
+          avgCloseTimeMs: { $avg: "$closedTickets.resolutionTimeMs" },
+          withinInternalSLA: {
+            $size: {
+              $filter: {
+                input: "$closedTickets",
+                as: "t",
+                cond: {
+                  $and: [
+                    { $eq: ["$$t.tatType", "INTERNAL"] },
+                    { $lte: ["$$t.resolutionTimeMs", 86400000] }
+                  ]
+                }
+              }
+            }
+          },
+          withinExternalSLA: {
+            $size: {
+              $filter: {
+                input: "$closedTickets",
+                as: "t",
+                cond: {
+                  $and: [
+                    { $eq: ["$$t.tatType", "EXTERNAL"] },
+                    { $lte: ["$$t.resolutionTimeMs", 172800000] }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    ]).toArray();
   }
 
   async findTicketById(id: string): Promise<Ticket | null> {
@@ -34,16 +148,111 @@ export class TicketsRepository {
     return this.ticketModel.findOne({ ticketNumber }).populate('departmentId assignedTo').exec();
   }
 
-  async updateTicketStatus(id: string, status: TicketStatus, resolvedAt?: Date): Promise<Ticket | null> {
-    const updatePayload: any = { status, updatedAt: new Date() };
+  async getAgentDetailedStats(agentId: string): Promise<any> {
+    const mongoose = require('mongoose');
+    const result = await this.ticketModel.db.collection('users').aggregate([
+      {
+        $match: { _id: new mongoose.Types.ObjectId(agentId) }
+      },
+      {
+        $lookup: {
+          from: 'tickets',
+          let: { userId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$assignedTo', '$$userId'] },
+                    { $in: ['$status', ['CLOSED', 'RESOLVED']] }
+                  ]
+                }
+              }
+            },
+            {
+              $addFields: {
+                rawResolutionTimeMs: {
+                  $subtract: [
+                    { $ifNull: ["$resolvedAt", "$updatedAt"] },
+                    "$createdAt"
+                  ]
+                }
+              }
+            },
+            {
+              $addFields: {
+                resolutionTimeMs: {
+                  $max: [
+                    0,
+                    {
+                      $subtract: [
+                        "$rawResolutionTimeMs",
+                        {
+                          $add: [
+                            { $ifNull: ["$totalPausedTimeMs", 0] },
+                            {
+                              $cond: {
+                                if: { $ne: ["$pausedAt", null] },
+                                then: { $subtract: [{ $ifNull: ["$resolvedAt", "$updatedAt"] }, "$pausedAt"] },
+                                else: 0
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              $sort: { createdAt: -1 }
+            }
+          ],
+          as: 'closedTickets'
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          agentName: { 
+            $trim: { 
+              input: { $concat: [{ $ifNull: ["$firstName", ""] }, " ", { $ifNull: ["$lastName", ""] }] } 
+            } 
+          },
+          agentEmail: "$email",
+          closedCount: { $size: "$closedTickets" },
+          avgCloseTimeMs: { $avg: "$closedTickets.resolutionTimeMs" },
+          closedTickets: 1
+        }
+      }
+    ]).toArray();
+    return result[0];
+  }
+
+  async updateTicketStatus(id: string, status: TicketStatus, resolvedAt?: Date, assignedTo?: string, extraFields?: any): Promise<Ticket | null> {
+    const updatePayload: any = { status, updatedAt: new Date(), ...extraFields };
     if (resolvedAt !== undefined) {
       updatePayload.resolvedAt = resolvedAt;
     }
-    return this.ticketModel.findByIdAndUpdate(id, updatePayload, { new: true }).exec();
+    if (assignedTo !== undefined) {
+      const mongoose = require('mongoose');
+      updatePayload.assignedTo = new mongoose.Types.ObjectId(assignedTo);
+    }
+    return this.ticketModel.findByIdAndUpdate(id, updatePayload, { returnDocument: 'after' }).exec();
+  }
+
+  async updateTicketDepartment(id: string, departmentId: string): Promise<Ticket | null> {
+    const mongoose = require('mongoose');
+    return this.ticketModel.findByIdAndUpdate(id, { departmentId: new mongoose.Types.ObjectId(departmentId), updatedAt: new Date() }, { returnDocument: 'after' }).exec();
+  }
+
+  async updateTicketTatType(id: string, tatType: 'INTERNAL' | 'EXTERNAL'): Promise<Ticket | null> {
+    return this.ticketModel.findByIdAndUpdate(id, { tatType }, { returnDocument: 'after' }).exec();
   }
 
   async updateTicketMessageId(id: string, messageId: string): Promise<Ticket | null> {
-    return this.ticketModel.findByIdAndUpdate(id, { messageId, updatedAt: new Date() }, { new: true }).exec();
+    return this.ticketModel.findByIdAndUpdate(id, { messageId, updatedAt: new Date() }, { returnDocument: 'after' }).exec();
   }
 
   async logActivity(ticketId: string, actorId: string | null, action: string, changes?: any, note?: string): Promise<ActivityLog> {
@@ -96,17 +305,16 @@ export class TicketsRepository {
   }
 
   async createTicket(ticketData: Partial<Ticket>, initialMessage: string): Promise<{ ticket: Ticket, message: Message }> {
-    // Fetch the correct department based on AI classification (MIS or LMS)
+    // Fetch the correct department based on AI classification
     const mongoose = require('mongoose');
-    let deptId = new mongoose.Types.ObjectId(); // Fallback if none found
+    let deptId = null; 
     try {
-      const intentName = ticketData.aiClassification?.intent || 'MIS';
-      const db = this.ticketModel.db;
-      let dept = await db.collection('departments').findOne({ name: intentName });
-      if (!dept) {
-        dept = await db.collection('departments').findOne({});
+      const intentName = ticketData.aiClassification?.intent || 'UNASSIGNED';
+      if (intentName !== 'UNASSIGNED') {
+        const db = this.ticketModel.db;
+        let dept = await db.collection('departments').findOne({ name: intentName });
+        if (dept) deptId = dept._id;
       }
-      if (dept) deptId = dept._id;
     } catch(e) {
       console.error('Failed to assign department', e);
     }

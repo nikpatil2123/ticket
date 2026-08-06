@@ -6,6 +6,7 @@ import { User } from '../../users/schemas/user.schema';
 export enum MessageDirection {
   INBOUND = 'INBOUND',
   OUTBOUND = 'OUTBOUND',
+  INTERNAL = 'INTERNAL',
 }
 
 @Schema({ timestamps: true })

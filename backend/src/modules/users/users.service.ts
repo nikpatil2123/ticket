@@ -14,12 +14,21 @@ export class UsersService {
       throw new ConflictException('User with this email already exists');
     }
 
+    let roleId = createUserDto.roleId;
+    if (!roleId && (createUserDto as any).role) {
+      const role = await this.usersRepository.findRoleByName((createUserDto as any).role);
+      if (role) {
+        roleId = (role as any)._id.toString();
+      }
+    }
+
     const salt = await bcrypt.genSalt(12);
     const passwordToHash = (createUserDto as any).password || 'password123';
     const passwordHash = await bcrypt.hash(passwordToHash, salt);
 
     return this.usersRepository.create({
       ...createUserDto,
+      roleId,
       passwordHash,
     } as any);
   }

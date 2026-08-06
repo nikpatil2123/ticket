@@ -9,8 +9,44 @@ export class TicketsService {
 
   constructor(private readonly ticketsRepository: TicketsRepository) {}
 
-  async getAllTickets(departmentId?: string): Promise<Ticket[]> {
-    return this.ticketsRepository.findAll(departmentId);
+  async getAllTickets(departmentId?: string, tatType?: string): Promise<Ticket[]> {
+    return this.ticketsRepository.findAll(departmentId, tatType);
+  }
+
+  async getTicketStats(departmentId?: string): Promise<any> {
+    const rawStats = await this.ticketsRepository.getTicketStats(departmentId);
+    
+    // Format the stats into a friendly object
+    const stats: Record<string, number> = {
+      TOTAL: 0,
+      NEW: 0,
+      OPEN: 0,
+      IN_PROGRESS: 0,
+      PENDING_CUSTOMER: 0,
+      RESOLVED: 0,
+      CLOSED: 0,
+    };
+    
+    rawStats.forEach(stat => {
+      if (stats[stat._id as string] !== undefined) {
+        stats[stat._id as string] = stat.count;
+      }
+      stats.TOTAL += stat.count;
+    });
+    
+    return stats;
+  }
+
+  async getAgentStats(): Promise<any[]> {
+    return this.ticketsRepository.getAgentStats();
+  }
+
+  async getAgentDetailedStats(agentId: string): Promise<any> {
+    const stats = await this.ticketsRepository.getAgentDetailedStats(agentId);
+    if (!stats) {
+      throw new NotFoundException('Agent not found or no stats available');
+    }
+    return stats;
   }
 
   async getTicket(id: string): Promise<Ticket> {
@@ -45,7 +81,7 @@ export class TicketsService {
     return this.ticketsRepository.logActivity(ticketId, actorId, action, changes, note);
   }
 
-  async updateStatus(id: string, updateDto: UpdateTicketStatusDto, actorId: string, googleAuthService?: any): Promise<Ticket> {
+  async updateStatus(id: string, updateDto: UpdateTicketStatusDto, actorId: string, googleAuthService?: any, user?: any): Promise<Ticket> {
     const ticket = await this.getTicket(id);
 
     if (ticket.status === TicketStatus.CLOSED) {
@@ -54,14 +90,47 @@ export class TicketsService {
 
     const resolvedAt = updateDto.status === TicketStatus.RESOLVED ? new Date() : null;
     
-    const updatedTicket = await this.ticketsRepository.updateTicketStatus(id, updateDto.status, resolvedAt || undefined);
+    // Auto-assign to the actor if it's being closed/resolved and isn't currently assigned
+    let finalAssignedTo = undefined;
+    if ((updateDto.status === TicketStatus.CLOSED || updateDto.status === TicketStatus.RESOLVED) && !ticket.assignedTo && actorId) {
+      finalAssignedTo = actorId;
+    }
+
+    // SLA Pausing Logic
+    const extraFields: any = {};
+    const pausedStatuses = [TicketStatus.PENDING_APPROVAL, TicketStatus.PENDING_DOCUMENT_CLARIFICATION, TicketStatus.PENDING_CUSTOMER];
+    const isNowPaused = pausedStatuses.includes(updateDto.status);
+    const wasPaused = pausedStatuses.includes(ticket.status);
+
+    if (isNowPaused && !wasPaused) {
+      extraFields.pausedAt = new Date();
+      extraFields.tatType = 'EXTERNAL';
+    } else if (!isNowPaused && wasPaused && ticket.pausedAt) {
+      const elapsedMs = new Date().getTime() - new Date(ticket.pausedAt).getTime();
+      extraFields.totalPausedTimeMs = (ticket.totalPausedTimeMs || 0) + elapsedMs;
+      extraFields.pausedAt = null;
+    }
+
+    const updatedTicket = await this.ticketsRepository.updateTicketStatus(id, updateDto.status, resolvedAt || undefined, finalAssignedTo, extraFields);
+    
+    if (updateDto.status === TicketStatus.CLOSED && user) {
+      const agentName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Agent';
+      await this.ticketsRepository.addMessage(
+        id,
+        'INTERNAL',
+        'SYSTEM',
+        [],
+        'Ticket Closed',
+        `Closed by the agent ${agentName}`
+      );
+    }
     
     await this.ticketsRepository.logActivity(id, actorId, 'STATUS_CHANGED', {
       oldStatus: ticket.status,
       newStatus: updateDto.status
     }, updateDto.resolutionNote);
 
-    // If closing, send an email to the user as a reply thread
+    // If closing, send the specific closure email to the user as a reply thread
     if (updateDto.status === TicketStatus.CLOSED && googleAuthService) {
       const bodyText = `Hello,\n\nYour support ticket ${ticket.ticketNumber} has been marked as CLOSED.\n\nResolution Note: ${updateDto.resolutionNote || 'Resolved by agent'}\n\nBest regards,\nParul University Support`;
       try {
@@ -75,12 +144,61 @@ export class TicketsService {
         );
         await this.sendEmailDirectly(ticket, 'Re:', bodyText, googleAuthService);
         await this.ticketsRepository.logActivity(id, actorId, 'SYSTEM_REPLY', {}, 'Automated closure email sent');
-      } catch(e) {
-        console.error('Failed to send closure email', e);
+      } catch (err) {
+        this.logger.error('Failed to send automated closure email', err);
+      }
+    } else if (updateDto.status !== ticket.status && updateDto.status !== TicketStatus.CLOSED && updateDto.status !== TicketStatus.NEW && googleAuthService) {
+      // Send a generic status update email for all other status changes
+      const readableStatus = updateDto.status.replace(/_/g, ' ');
+      const bodyText = `Hello,\n\nThe status of your support ticket ${ticket.ticketNumber} has been updated to: ${readableStatus}\n\nBest regards,\nParul University Support`;
+      try {
+        await this.ticketsRepository.addMessage(
+          id,
+          'OUTBOUND',
+          'support@acme.com',
+          [ticket.customerEmail],
+          `Re: ${ticket.subject}`,
+          bodyText
+        );
+        await this.sendEmailDirectly(ticket, 'Re:', bodyText, googleAuthService);
+        await this.ticketsRepository.logActivity(id, actorId, 'SYSTEM_REPLY', {}, `Automated status update email sent (${readableStatus})`);
+      } catch (err) {
+        this.logger.error('Failed to send automated status email', err);
       }
     }
 
     if (!updatedTicket) throw new NotFoundException('Failed to update ticket');
+    return updatedTicket;
+  }
+
+  async updateDepartment(id: string, departmentId: string, actorId: string): Promise<Ticket> {
+    const ticket = await this.getTicket(id);
+
+    if (ticket.status === TicketStatus.CLOSED) {
+      throw new BadRequestException('Cannot update department of a CLOSED ticket');
+    }
+
+    const updatedTicket = await this.ticketsRepository.updateTicketDepartment(id, departmentId);
+    
+    await this.ticketsRepository.logActivity(id, actorId, 'DEPARTMENT_CHANGED', {
+      oldDepartment: ticket.departmentId?._id?.toString() || 'UNASSIGNED',
+      newDepartment: departmentId
+    }, 'Admin manually reassigned department');
+
+    if (!updatedTicket) throw new NotFoundException('Failed to update ticket department');
+    return updatedTicket;
+  }
+
+  async updateTatType(id: string, tatType: 'INTERNAL' | 'EXTERNAL', actorId: string): Promise<Ticket> {
+    const ticket = await this.getTicket(id);
+    const updatedTicket = await this.ticketsRepository.updateTicketTatType(id, tatType);
+    
+    await this.logActivity(id, actorId, 'TAT_TYPE_CHANGED', {
+      oldTatType: ticket.tatType,
+      newTatType: tatType
+    }, 'Admin manually changed TAT type');
+    
+    if (!updatedTicket) throw new NotFoundException('Failed to update ticket TAT type');
     return updatedTicket;
   }
 

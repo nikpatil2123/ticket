@@ -1,25 +1,32 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/api/api-client';
+import { useSearchParams } from 'next/navigation';
 
 export default function TicketTrackerPage() {
-  const [ticketNumber, setTicketNumber] = useState('');
+  const searchParams = useSearchParams();
+  const initialSearch = searchParams.get('search');
+  
+  const [ticketNumber, setTicketNumber] = useState(initialSearch || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<any>(null);
 
-  const handleTrack = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!ticketNumber.trim()) return;
+  useEffect(() => {
+    if (initialSearch) {
+      fetchTicket(initialSearch);
+    }
+  }, [initialSearch]);
 
+  const fetchTicket = async (num: string) => {
     setLoading(true);
     setError('');
     setResult(null);
 
     try {
-      const cleanNum = ticketNumber.trim();
+      const cleanNum = num.trim();
       const res = await apiClient.get(`/tickets/track/${cleanNum}`);
       setResult(res.data.data);
     } catch (err: any) {
@@ -27,6 +34,12 @@ export default function TicketTrackerPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleTrack = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ticketNumber.trim()) return;
+    fetchTicket(ticketNumber);
   };
 
   return (

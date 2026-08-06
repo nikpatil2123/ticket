@@ -13,7 +13,16 @@ export class CreateUserDto {
   lastName: string;
 
   @IsMongoId()
-  roleId: string;
+  @IsOptional()
+  roleId?: string;
+
+  @IsString()
+  @IsOptional()
+  role?: string;
+
+  @IsString()
+  @IsOptional()
+  password?: string;
 
   @IsMongoId()
   departmentId: string;

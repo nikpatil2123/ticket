@@ -3,9 +3,11 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<any>(null);
+  const [isTatOpen, setIsTatOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -50,17 +52,50 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <div className="pt-5 pb-2 px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                 Administration
               </div>
+              <Link href="/admin/analytics" className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-md text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
+                Analytics Dashboard
+              </Link>
+              <Link href="/admin/agent-analytics" className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-md text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
+                Agent Analytics
+              </Link>
               <Link href="/admin/team" className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-md text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
                 Team Management
               </Link>
               <Link href="/admin/departments" className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-md text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
                 Departments
               </Link>
+              
+              <div className="flex flex-col">
+                <button 
+                  onClick={() => setIsTatOpen(!isTatOpen)}
+                  className="flex items-center justify-between w-full px-3 py-2 text-xs font-medium rounded-md text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+                >
+                  <span className="flex items-center gap-2.5">TAT</span>
+                  {isTatOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                </button>
+                {isTatOpen && (
+                  <div className="flex flex-col ml-5 mt-1 space-y-1 border-l border-slate-700 pl-2">
+                    <Link href="/admin/tat/internal" className="px-3 py-1.5 text-xs font-medium rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
+                      Internal TAT
+                    </Link>
+                    <Link href="/admin/tat/external" className="px-3 py-1.5 text-xs font-medium rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
+                      External TAT
+                    </Link>
+                    <Link href="/admin/tat/settings" className="px-3 py-1.5 text-xs font-medium rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
+                      TAT Settings
+                    </Link>
+                  </div>
+                )}
+              </div>
+
               <Link href="/admin/tracker" className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-md text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
                 Ticket Tracker
               </Link>
               <Link href="/admin/automation" className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-md text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
                 Rule Engine
+              </Link>
+              <Link href="/admin/templates" className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-md text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
+                Canned Templates
               </Link>
             </>
           )}
