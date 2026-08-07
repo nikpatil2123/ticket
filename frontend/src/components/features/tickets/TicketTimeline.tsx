@@ -8,6 +8,9 @@ import { apiClient } from '@/lib/api/api-client';
 export default function TicketTimeline({ ticketId }: { ticketId: string }) {
   const [reply, setReply] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isUpdateCountModalOpen, setIsUpdateCountModalOpen] = useState(false);
+  const [newRequestCount, setNewRequestCount] = useState(1);
+  const [updateReason, setUpdateReason] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
@@ -128,6 +131,35 @@ export default function TicketTimeline({ ticketId }: { ticketId: string }) {
     }
   });
 
+  const updateRequestCountMutation = useMutation({
+    mutationFn: async ({ count, reason }: { count: number, reason: string }) => {
+      await apiClient.put(`/tickets/${ticketId}/request-count`, { requestCount: count, reason });
+    },
+    onSuccess: () => {
+      setIsUpdateCountModalOpen(false);
+      setUpdateReason('');
+      queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] });
+      queryClient.invalidateQueries({ queryKey: ['ticket', ticketId, 'timeline'] });
+    },
+    onError: (err: any) => {
+      alert(`Failed to update request count: ${err.response?.data?.message || err.message}`);
+    }
+  });
+
+  const updatePriorityMutation = useMutation({
+    mutationFn: async (priority: string) => {
+      const res = await apiClient.put(`/tickets/${ticketId}/priority`, { priority });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] });
+      queryClient.invalidateQueries({ queryKey: ['ticket', ticketId, 'timeline'] });
+    },
+    onError: (err: any) => {
+      alert(`Failed to update priority: ${err.response?.data?.message || err.message}`);
+    }
+  });
+
   if (isTicketLoading || isTimelineLoading) {
     return <div className="h-full flex items-center justify-center">Loading ticket details...</div>;
   }
@@ -156,9 +188,31 @@ export default function TicketTimeline({ ticketId }: { ticketId: string }) {
               </span>
             )}
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">{ticketData.subject}</p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-xs text-slate-500">{ticketData.subject}</p>
+            {ticketData.requestCount > 1 && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                Multi-Request Ticket
+              </span>
+            )}
+          </div>
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2 items-center flex-wrap justify-end">
+          <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-2 py-1.5 rounded-md shadow-2xs">
+            <span className="text-[10px] font-semibold text-slate-500 uppercase">Requests:</span>
+            <span className="text-xs font-bold text-slate-900">{ticketData.requestCount || 1}</span>
+            {isAdmin && ticketData.status !== 'CLOSED' && (
+              <button 
+                onClick={() => {
+                  setNewRequestCount(ticketData.requestCount || 1);
+                  setIsUpdateCountModalOpen(true);
+                }}
+                className="ml-1 text-[10px] text-indigo-600 hover:text-indigo-800 hover:underline"
+              >
+                Edit
+              </button>
+            )}
+          </div>
           {isAdmin && departments && (
             <select
               className="px-2 py-1.5 text-xs font-semibold rounded-md border border-slate-300 bg-white text-slate-700 shadow-2xs"
@@ -190,6 +244,29 @@ export default function TicketTimeline({ ticketId }: { ticketId: string }) {
             <option value="" disabled>Assign TAT...</option>
               <option value="INTERNAL">Internal TAT</option>
               <option value="EXTERNAL">External TAT</option>
+            </select>
+          )}
+          {isAdmin && (
+            <select
+              className={`px-2 py-1.5 text-xs font-semibold rounded-md border bg-white shadow-2xs ${
+                ticketData.priority === 'P1' ? 'border-red-300 text-red-700' :
+                ticketData.priority === 'P2' ? 'border-orange-300 text-orange-700' :
+                ticketData.priority === 'P3' ? 'border-yellow-300 text-yellow-700' :
+                'border-slate-300 text-slate-700'
+              }`}
+              onChange={(e) => {
+                if (e.target.value) {
+                  updatePriorityMutation.mutate(e.target.value);
+                }
+              }}
+              value={ticketData.priority || 'P3'}
+              disabled={updatePriorityMutation.isPending || ticketData.status === 'CLOSED'}
+            >
+              <option value="" disabled>Priority...</option>
+              <option value="P1">Priority 1</option>
+              <option value="P2">Priority 2</option>
+              <option value="P3">Priority 3</option>
+              <option value="P4">Priority 4</option>
             </select>
           )}
           {ticketData.status !== 'CLOSED' && (
@@ -226,6 +303,26 @@ export default function TicketTimeline({ ticketId }: { ticketId: string }) {
         {timelineData?.map((item: any) => {
           if (item.type === 'ACTIVITY') {
             const data = item.data;
+            if (data.action === 'REQUEST_COUNT_UPDATED') {
+              return (
+                <div key={data._id} className="flex items-center justify-center my-2">
+                  <div className="text-[10px] bg-blue-50 border border-blue-200 px-3 py-2 rounded-lg max-w-sm text-center">
+                    <p className="font-semibold text-blue-800 mb-0.5">Request Count Updated: {data.changes.oldRequestCount} → {data.changes.newRequestCount}</p>
+                    <p className="text-blue-600 italic">"{data.changes.reason}"</p>
+                    <p className="text-[9px] text-blue-400 mt-1">{new Date(data.createdAt).toLocaleTimeString()}</p>
+                  </div>
+                </div>
+              );
+            }
+            if (data.action === 'PRIORITY_UPDATED') {
+              return (
+                <div key={data._id} className="flex items-center justify-center my-1">
+                  <span className="text-[10px] font-medium text-slate-500 bg-slate-100 border border-slate-200 px-3 py-1 rounded-full">
+                    {new Date(data.createdAt).toLocaleTimeString()} - Priority changed to {data.changes.newPriority} {data.note ? `(${data.note})` : ''}
+                  </span>
+                </div>
+              );
+            }
             return (
               <div key={data._id} className="flex items-center justify-center my-1">
                 <span className="text-[10px] font-medium text-slate-500 bg-slate-100 border border-slate-200 px-3 py-1 rounded-full">
@@ -319,6 +416,55 @@ export default function TicketTimeline({ ticketId }: { ticketId: string }) {
           </button>
         </div>
       </div>
+
+      {/* Update Request Count Modal */}
+      {isUpdateCountModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <h3 className="text-lg font-bold text-slate-900 mb-4">Update Request Count</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">New Request Count</label>
+                <input 
+                  type="number" 
+                  min="1"
+                  value={newRequestCount}
+                  onChange={(e) => setNewRequestCount(parseInt(e.target.value) || 1)}
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
+                />
+                <p className="text-xs text-slate-500 mt-1">Previous count: {ticketData.requestCount || 1}</p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Reason (Mandatory)</label>
+                <textarea 
+                  value={updateReason}
+                  onChange={(e) => setUpdateReason(e.target.value)}
+                  placeholder="e.g. This email contains Salary, Leave, and Attendance requests."
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm h-24 resize-none focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button 
+                onClick={() => setIsUpdateCountModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => updateRequestCountMutation.mutate({ count: newRequestCount, reason: updateReason })}
+                disabled={newRequestCount < 1 || !updateReason.trim() || updateRequestCountMutation.isPending}
+                className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {updateRequestCountMutation.isPending ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

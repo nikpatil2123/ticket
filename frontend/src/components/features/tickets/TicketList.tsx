@@ -1,16 +1,17 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { Search } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/api-client';
 
 export default function TicketList({ tatType }: { tatType?: 'INTERNAL' | 'EXTERNAL' } = {}) {
+  const [priorityFilter, setPriorityFilter] = useState<string>('');
   const { data, isLoading, error } = useQuery({
-    queryKey: ['tickets', tatType],
+    queryKey: ['tickets', tatType, priorityFilter],
     queryFn: async () => {
-      const response = await apiClient.get('/tickets', { params: { tatType } });
+      const response = await apiClient.get('/tickets', { params: { tatType, priority: priorityFilter || undefined } });
       return response.data.data;
     },
     refetchInterval: 5000,
@@ -43,13 +44,26 @@ export default function TicketList({ tatType }: { tatType?: 'INTERNAL' | 'EXTERN
             {syncMutation.isPending ? 'Syncing...' : 'Sync Emails'}
           </button>
         </div>
-        <div className="relative">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search tickets..."
-            className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 pl-9 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
-          />
+        <div className="relative flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search tickets..."
+              className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 pl-9 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+            />
+          </div>
+          <select 
+            value={priorityFilter}
+            onChange={(e) => setPriorityFilter(e.target.value)}
+            className="h-9 w-24 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+          >
+            <option value="">All Prio</option>
+            <option value="P1">P1</option>
+            <option value="P2">P2</option>
+            <option value="P3">P3</option>
+            <option value="P4">P4</option>
+          </select>
         </div>
       </div>
       
@@ -89,8 +103,13 @@ export default function TicketList({ tatType }: { tatType?: 'INTERNAL' | 'EXTERN
                   <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-semibold text-[10px]">
                     {ticket.departmentId?.name || ticket.aiClassification?.intent || 'UNASSIGNED'}
                   </span>
-                  <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 font-semibold text-[10px]">
-                    P{ticket.priority}
+                  <span className={`px-1.5 py-0.5 rounded border font-semibold text-[10px] ${
+                    ticket.priority === 'P1' ? 'bg-red-50 text-red-700 border-red-200' :
+                    ticket.priority === 'P2' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                    ticket.priority === 'P3' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                    'bg-slate-50 text-slate-700 border-slate-200'
+                  }`}>
+                    {ticket.priority || 'P3'}
                   </span>
                 </div>
               </div>

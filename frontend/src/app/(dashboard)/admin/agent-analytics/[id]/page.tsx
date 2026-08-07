@@ -14,6 +14,8 @@ export default function AgentDetailedAnalyticsPage() {
   const [error, setError] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [internalHrs, setInternalHrs] = useState(24);
+  const [externalHrs, setExternalHrs] = useState(48);
 
   useEffect(() => {
     if (id) {
@@ -27,8 +29,16 @@ export default function AgentDetailedAnalyticsPage() {
       const params = new URLSearchParams();
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
-      const res = await apiClient.get(`/tickets/agent-stats/${id}?${params.toString()}`);
-      setAgentStats(res.data.data);
+
+      const [statsRes, internalRes, externalRes] = await Promise.all([
+        apiClient.get(`/tickets/agent-stats/${id}?${params.toString()}`),
+        apiClient.get('/settings/tat_internal').catch(() => null),
+        apiClient.get('/settings/tat_external').catch(() => null)
+      ]);
+
+      setAgentStats(statsRes.data.data);
+      if (internalRes?.data?.data?.resolutionTimeHours) setInternalHrs(internalRes.data.data.resolutionTimeHours);
+      if (externalRes?.data?.data?.resolutionTimeHours) setExternalHrs(externalRes.data.data.resolutionTimeHours);
     } catch (err: any) {
       console.error('Failed to load agent detailed stats', err);
       setError(err.response?.data?.message || err.message || 'Failed to load stats');
@@ -169,8 +179,20 @@ export default function AgentDetailedAnalyticsPage() {
                     <td className="px-6 py-4 text-slate-600 flex items-center gap-1.5">
                       {formatDate(ticket.resolvedAt || ticket.updatedAt)}
                     </td>
-                    <td className="px-6 py-4 text-right font-medium text-slate-900">
-                      {formatDuration(ticket.resolutionTimeMs)}
+                    <td className="px-6 py-4 text-right font-medium">
+                      <div className="flex items-center justify-end gap-2">
+                        {ticket.tatType === 'INTERNAL' && (
+                          ticket.resolutionTimeMs <= internalHrs * 3600000
+                            ? <span title="Met SLA" className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            : <span title="Missed SLA" className="w-2 h-2 rounded-full bg-red-500"></span>
+                        )}
+                        {ticket.tatType === 'EXTERNAL' && (
+                          ticket.resolutionTimeMs <= externalHrs * 3600000
+                            ? <span title="Met SLA" className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            : <span title="Missed SLA" className="w-2 h-2 rounded-full bg-red-500"></span>
+                        )}
+                        <span className="text-slate-900">{formatDuration(ticket.resolutionTimeMs)}</span>
+                      </div>
                     </td>
                   </tr>
                 ))}

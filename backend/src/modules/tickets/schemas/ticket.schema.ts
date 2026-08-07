@@ -72,6 +72,9 @@ export class Ticket extends Document {
   @Prop({ type: Number, default: 0 })
   totalPausedTimeMs?: number;
 
+  @Prop({ type: Number, default: 1, min: 1 })
+  requestCount: number;
+
   @Prop()
   messageId: string;
 
@@ -80,6 +83,9 @@ export class Ticket extends Document {
 
   @Prop()
   resolvedAt: Date;
+
+  @Prop({ type: Date, default: null })
+  inProgressAt?: Date;
 }
 
 export const TicketSchema = SchemaFactory.createForClass(Ticket);

@@ -16,14 +16,41 @@ export class TicketsRepository {
     @InjectModel(Attachment.name) private attachmentModel: Model<Attachment>,
   ) {}
 
-  async findAll(departmentId?: string, tatType?: string): Promise<Ticket[]> {
+  async findAll(departmentId?: string, tatType?: string, priority?: string): Promise<Ticket[]> {
     const filter: any = {};
     if (departmentId) filter.departmentId = departmentId;
     if (tatType) filter.tatType = tatType;
+    if (priority) filter.priority = priority;
     return this.ticketModel
       .find(filter)
       .sort({ updatedAt: -1 })
       .populate('departmentId assignedTo')
+      .exec();
+  }
+
+  async updateRequestCount(
+    id: string,
+    requestCount: number,
+  ): Promise<Ticket | null> {
+    return this.ticketModel
+      .findByIdAndUpdate(
+        id,
+        { $set: { requestCount } },
+        { new: true }
+      )
+      .exec();
+  }
+
+  async updateTicketPriority(
+    id: string,
+    priority: TicketPriority,
+  ): Promise<Ticket | null> {
+    return this.ticketModel
+      .findByIdAndUpdate(
+        id,
+        { $set: { priority } },
+        { new: true }
+      )
       .exec();
   }
 
@@ -40,12 +67,18 @@ export class TicketsRepository {
     return this.ticketModel
       .aggregate([
         { $match: matchStage },
-        { $group: { _id: '$status', count: { $sum: 1 } } },
+        { 
+          $group: { 
+            _id: '$status', 
+            count: { $sum: 1 },
+            requestCountSum: { $sum: { $ifNull: ['$requestCount', 1] } }
+          } 
+        },
       ])
       .exec();
   }
 
-  async getAgentStats(startDate?: string, endDate?: string): Promise<any[]> {
+  async getAgentStats(startDate?: string, endDate?: string, internalSlaMs: number = 86400000, externalSlaMs: number = 172800000): Promise<any[]> {
     const ticketMatchConditions: any[] = [
       { $eq: ['$assignedTo', '$$userId'] },
       { $in: ['$status', ['CLOSED', 'RESOLVED']] },
@@ -82,7 +115,7 @@ export class TicketsRepository {
                   rawResolutionTimeMs: {
                     $subtract: [
                       { $ifNull: ['$resolvedAt', '$updatedAt'] },
-                      '$createdAt',
+                      { $ifNull: ['$inProgressAt', '$createdAt'] },
                     ],
                   },
                 },
@@ -149,7 +182,7 @@ export class TicketsRepository {
                   cond: {
                     $and: [
                       { $eq: ['$$t.tatType', 'INTERNAL'] },
-                      { $lte: ['$$t.resolutionTimeMs', 86400000] },
+                      { $lte: ['$$t.resolutionTimeMs', internalSlaMs] },
                     ],
                   },
                 },
@@ -163,7 +196,7 @@ export class TicketsRepository {
                   cond: {
                     $and: [
                       { $eq: ['$$t.tatType', 'EXTERNAL'] },
-                      { $lte: ['$$t.resolutionTimeMs', 172800000] },
+                      { $lte: ['$$t.resolutionTimeMs', externalSlaMs] },
                     ],
                   },
                 },
@@ -197,7 +230,7 @@ export class TicketsRepository {
       .exec();
   }
 
-  async getAgentDetailedStats(agentId: string, startDate?: string, endDate?: string): Promise<any> {
+  async getAgentDetailedStats(agentId: string, startDate?: string, endDate?: string, internalSlaMs: number = 86400000, externalSlaMs: number = 172800000): Promise<any> {
     const mongoose = require('mongoose');
     
     const dateMatch: any = {};
@@ -234,7 +267,7 @@ export class TicketsRepository {
                   rawResolutionTimeMs: {
                     $subtract: [
                       { $ifNull: ['$resolvedAt', '$updatedAt'] },
-                      '$createdAt',
+                      { $ifNull: ['$inProgressAt', '$createdAt'] },
                     ],
                   },
                 },

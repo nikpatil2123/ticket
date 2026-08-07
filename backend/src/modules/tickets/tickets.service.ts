@@ -5,20 +5,25 @@ import {
   Logger,
 } from '@nestjs/common';
 import { TicketsRepository } from './tickets.repository';
-import { Ticket, TicketStatus } from './schemas/ticket.schema';
+import { Ticket, TicketStatus, TicketPriority } from './schemas/ticket.schema';
 import { UpdateTicketStatusDto } from './dto/update-ticket-status.dto';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class TicketsService {
   private readonly logger = new Logger(TicketsService.name);
 
-  constructor(private readonly ticketsRepository: TicketsRepository) {}
+  constructor(
+    private readonly ticketsRepository: TicketsRepository,
+    private readonly settingsService: SettingsService,
+  ) {}
 
   async getAllTickets(
     departmentId?: string,
     tatType?: string,
+    priority?: string,
   ): Promise<Ticket[]> {
-    return this.ticketsRepository.findAll(departmentId, tatType);
+    return this.ticketsRepository.findAll(departmentId, tatType, priority);
   }
 
   async getTicketStats(departmentId?: string, startDate?: string, endDate?: string): Promise<any> {
@@ -27,6 +32,10 @@ export class TicketsService {
     // Format the stats into a friendly object
     const stats: Record<string, number> = {
       TOTAL: 0,
+      TOTAL_REQUESTS: 0,
+      IN_PROGRESS_REQUESTS: 0,
+      RESOLVED_REQUESTS: 0,
+      CLOSED_REQUESTS: 0,
       NEW: 0,
       OPEN: 0,
       IN_PROGRESS: 0,
@@ -40,17 +49,41 @@ export class TicketsService {
         stats[stat._id as string] = stat.count;
       }
       stats.TOTAL += stat.count;
+      const reqCount = stat.requestCountSum || stat.count;
+      stats.TOTAL_REQUESTS += reqCount;
+      
+      // Breakdown requests by specific status
+      if (stat._id === 'IN_PROGRESS' || stat._id === 'OPEN') {
+        stats.IN_PROGRESS_REQUESTS += reqCount;
+      } else if (stat._id === 'RESOLVED') {
+        stats.RESOLVED_REQUESTS += reqCount;
+      } else if (stat._id === 'CLOSED') {
+        stats.CLOSED_REQUESTS += reqCount;
+      }
     });
 
     return stats;
   }
 
   async getAgentStats(startDate?: string, endDate?: string): Promise<any[]> {
-    return this.ticketsRepository.getAgentStats(startDate, endDate);
+    const internalTat = await this.settingsService.getSetting('tat_internal');
+    const externalTat = await this.settingsService.getSetting('tat_external');
+    
+    // Default to 24 hrs for internal, 48 hrs for external if not set
+    const internalHours = internalTat?.resolutionTimeHours || 24;
+    const externalHours = externalTat?.resolutionTimeHours || 48;
+
+    return this.ticketsRepository.getAgentStats(startDate, endDate, internalHours * 3600000, externalHours * 3600000);
   }
 
   async getAgentDetailedStats(agentId: string, startDate?: string, endDate?: string): Promise<any> {
-    const stats = await this.ticketsRepository.getAgentDetailedStats(agentId, startDate, endDate);
+    const internalTat = await this.settingsService.getSetting('tat_internal');
+    const externalTat = await this.settingsService.getSetting('tat_external');
+    
+    const internalHours = internalTat?.resolutionTimeHours || 24;
+    const externalHours = externalTat?.resolutionTimeHours || 48;
+
+    const stats = await this.ticketsRepository.getAgentDetailedStats(agentId, startDate, endDate, internalHours * 3600000, externalHours * 3600000);
     if (!stats) {
       throw new NotFoundException('Agent not found or no stats available');
     }
@@ -168,6 +201,10 @@ export class TicketsService {
       extraFields.pausedAt = null;
     }
 
+    if (updateDto.status === TicketStatus.IN_PROGRESS && !ticket.inProgressAt) {
+      extraFields.inProgressAt = new Date();
+    }
+
     const updatedTicket = await this.ticketsRepository.updateTicketStatus(
       id,
       updateDto.status,
@@ -265,6 +302,77 @@ export class TicketsService {
     }
 
     if (!updatedTicket) throw new NotFoundException('Failed to update ticket');
+    return updatedTicket;
+  }
+
+  async updateRequestCount(
+    id: string,
+    requestCount: number,
+    reason: string,
+    actorId: string,
+  ): Promise<Ticket> {
+    if (requestCount < 1) {
+      throw new BadRequestException('requestCount must be at least 1');
+    }
+    if (!reason || reason.trim() === '') {
+      throw new BadRequestException('Reason is mandatory for updating request count');
+    }
+
+    const ticket = await this.getTicket(id);
+    const oldRequestCount = ticket.requestCount || 1;
+
+    const updatedTicket = await this.ticketsRepository.updateRequestCount(
+      id,
+      requestCount,
+    );
+
+    if (!updatedTicket) throw new NotFoundException('Failed to update ticket');
+
+    await this.ticketsRepository.logActivity(
+      id,
+      actorId,
+      'REQUEST_COUNT_UPDATED',
+      {
+        oldRequestCount,
+        newRequestCount: requestCount,
+        difference: requestCount - oldRequestCount,
+        reason,
+      },
+      reason,
+    );
+
+    return updatedTicket;
+  }
+
+  async updatePriority(
+    id: string,
+    priority: TicketPriority,
+    actorId: string,
+  ): Promise<Ticket> {
+    const ticket = await this.getTicket(id);
+
+    if (ticket.status === TicketStatus.CLOSED) {
+      throw new BadRequestException('Cannot update priority of a CLOSED ticket');
+    }
+
+    const updatedTicket = await this.ticketsRepository.updateTicketPriority(
+      id,
+      priority,
+    );
+
+    if (!updatedTicket) throw new NotFoundException('Failed to update ticket');
+
+    await this.ticketsRepository.logActivity(
+      id,
+      actorId,
+      'PRIORITY_UPDATED',
+      {
+        oldPriority: ticket.priority || TicketPriority.P3,
+        newPriority: priority,
+      },
+      `Admin manually updated priority to ${priority}`,
+    );
+
     return updatedTicket;
   }
 

@@ -12,6 +12,7 @@ import {
   Attachment,
   AttachmentSchema,
 } from '../email/schemas/attachment.schema';
+import { SettingsModule } from '../settings/settings.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import {
       { name: Attachment.name, schema: AttachmentSchema },
     ]),
     AuthModule,
+    SettingsModule,
   ],
   controllers: [TicketsController],
   providers: [TicketsService, TicketsRepository],

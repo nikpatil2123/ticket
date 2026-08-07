@@ -29,9 +29,11 @@ export class TicketsController {
         ? req.query.departmentId
         : req.user.departmentId;
     const tatType = req.query.tatType;
+    const priority = req.query.priority;
     const tickets = await this.ticketsService.getAllTickets(
       departmentId,
       tatType,
+      priority,
     );
     return { data: tickets };
   }
@@ -108,6 +110,64 @@ export class TicketsController {
       req.user,
     );
     return { data: ticket };
+  }
+
+  @Put(':id/request-count')
+  async updateTicketRequestCount(
+    @Param('id') id: string,
+    @Body('requestCount') requestCount: number,
+    @Body('reason') reason: string,
+    @Req() req: any,
+  ) {
+    try {
+      const isAdmin =
+        req.user.role === 'ADMIN' || req.user.roleId?.name === 'ADMIN';
+      if (!isAdmin) {
+        throw new Error(`Unauthorized: Only Admins can update request count.`);
+      }
+      const actorId = req.user._id?.toString() || req.user.sub?.toString();
+      const ticket = await this.ticketsService.updateRequestCount(
+        id,
+        requestCount,
+        reason,
+        actorId,
+      );
+      return { data: ticket };
+    } catch (e: any) {
+      console.error('Failed to update request count:', e);
+      throw new HttpException(
+        e.message || 'Internal server error',
+        e.status || 500,
+      );
+    }
+  }
+
+  @Put(':id/priority')
+  async updateTicketPriority(
+    @Param('id') id: string,
+    @Body('priority') priority: any,
+    @Req() req: any,
+  ) {
+    try {
+      const isAdmin =
+        req.user.role === 'ADMIN' || req.user.roleId?.name === 'ADMIN';
+      if (!isAdmin) {
+        throw new Error(`Unauthorized: Only Admins can update priority.`);
+      }
+      const actorId = req.user._id?.toString() || req.user.sub?.toString();
+      const ticket = await this.ticketsService.updatePriority(
+        id,
+        priority,
+        actorId,
+      );
+      return { data: ticket };
+    } catch (e: any) {
+      console.error('Failed to update priority:', e);
+      throw new HttpException(
+        e.message || 'Internal server error',
+        e.status || 500,
+      );
+    }
   }
 
   @Put(':id/department')

@@ -61,7 +61,7 @@ export default function AnalyticsDashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Total Tickets */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center gap-4">
           <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
@@ -70,6 +70,50 @@ export default function AnalyticsDashboardPage() {
           <div>
             <p className="text-sm font-medium text-slate-500">Total Tickets</p>
             <h3 className="text-2xl font-bold text-slate-900">{stats.TOTAL}</h3>
+          </div>
+        </div>
+
+        {/* Total Requests */}
+        <div className="bg-white rounded-xl shadow-sm border border-indigo-100 p-6 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center">
+            <Ticket className="w-6 h-6 text-indigo-600" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-indigo-600">Total Requests</p>
+            <h3 className="text-2xl font-bold text-slate-900">{stats.TOTAL_REQUESTS}</h3>
+          </div>
+        </div>
+
+        {/* In Progress Requests */}
+        <div className="bg-white rounded-xl shadow-sm border border-indigo-100 p-6 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center">
+            <Clock className="w-6 h-6 text-indigo-600" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-indigo-600">In Progress Requests</p>
+            <h3 className="text-2xl font-bold text-slate-900">{stats.IN_PROGRESS_REQUESTS}</h3>
+          </div>
+        </div>
+
+        {/* Resolved Requests */}
+        <div className="bg-white rounded-xl shadow-sm border border-indigo-100 p-6 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center">
+            <CheckCircle2 className="w-6 h-6 text-indigo-600" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-indigo-600">Resolved Requests</p>
+            <h3 className="text-2xl font-bold text-slate-900">{stats.RESOLVED_REQUESTS}</h3>
+          </div>
+        </div>
+
+        {/* Closed Requests */}
+        <div className="bg-white rounded-xl shadow-sm border border-indigo-100 p-6 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center">
+            <Archive className="w-6 h-6 text-indigo-600" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-indigo-600">Closed Requests</p>
+            <h3 className="text-2xl font-bold text-slate-900">{stats.CLOSED_REQUESTS}</h3>
           </div>
         </div>
 

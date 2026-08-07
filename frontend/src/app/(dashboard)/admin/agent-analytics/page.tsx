@@ -10,6 +10,8 @@ export default function AgentAnalyticsPage() {
   const [error, setError] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [internalHrs, setInternalHrs] = useState(24);
+  const [externalHrs, setExternalHrs] = useState(48);
 
   useEffect(() => {
     fetchStats();
@@ -21,8 +23,16 @@ export default function AgentAnalyticsPage() {
       const params = new URLSearchParams();
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
-      const res = await apiClient.get(`/tickets/agent-stats?${params.toString()}`);
-      setStats(res.data.data);
+
+      const [statsRes, internalRes, externalRes] = await Promise.all([
+        apiClient.get(`/tickets/agent-stats?${params.toString()}`),
+        apiClient.get('/settings/tat_internal').catch(() => null),
+        apiClient.get('/settings/tat_external').catch(() => null)
+      ]);
+
+      setStats(statsRes.data.data);
+      if (internalRes?.data?.data?.resolutionTimeHours) setInternalHrs(internalRes.data.data.resolutionTimeHours);
+      if (externalRes?.data?.data?.resolutionTimeHours) setExternalHrs(externalRes.data.data.resolutionTimeHours);
     } catch (err: any) {
       console.error('Failed to load agent stats', err);
       setError(err.response?.data?.message || err.message || 'Failed to load stats');
@@ -92,8 +102,8 @@ export default function AgentAnalyticsPage() {
                 <th className="px-6 py-4 font-semibold text-slate-900">Agent</th>
                 <th className="px-6 py-4 font-semibold text-slate-900 text-center">Total Closed</th>
                 <th className="px-6 py-4 font-semibold text-slate-900 text-center">Avg Time to Close</th>
-                <th className="px-6 py-4 font-semibold text-slate-900 text-center">Internal SLA Met (≤24h)</th>
-                <th className="px-6 py-4 font-semibold text-slate-900 text-center">External SLA Met (≤48h)</th>
+                <th className="px-6 py-4 font-semibold text-slate-900 text-center">Internal SLA Met (≤{internalHrs}h)</th>
+                <th className="px-6 py-4 font-semibold text-slate-900 text-center">External SLA Met (≤{externalHrs}h)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
