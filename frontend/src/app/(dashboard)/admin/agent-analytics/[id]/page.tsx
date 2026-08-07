@@ -14,6 +14,7 @@ export default function AgentDetailedAnalyticsPage() {
   const [error, setError] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [slaFilter, setSlaFilter] = useState('ALL');
   const [internalHrs, setInternalHrs] = useState(24);
   const [externalHrs, setExternalHrs] = useState(48);
 
@@ -78,6 +79,27 @@ export default function AgentDetailedAnalyticsPage() {
     return <div className="p-8 text-center text-red-500 font-medium">{error || 'Agent not found'}</div>;
   }
 
+  const filteredTickets = agentStats?.closedTickets?.filter((ticket: any) => {
+    if (slaFilter === 'ALL') return true;
+    
+    const isInternal = ticket.tatType === 'INTERNAL';
+    const isExternal = ticket.tatType === 'EXTERNAL';
+    
+    if (slaFilter === 'INTERNAL_MET') {
+      return isInternal && ticket.resolutionTimeMs <= internalHrs * 3600000;
+    }
+    if (slaFilter === 'INTERNAL_MISSED') {
+      return isInternal && ticket.resolutionTimeMs > internalHrs * 3600000;
+    }
+    if (slaFilter === 'EXTERNAL_MET') {
+      return isExternal && ticket.resolutionTimeMs <= externalHrs * 3600000;
+    }
+    if (slaFilter === 'EXTERNAL_MISSED') {
+      return isExternal && ticket.resolutionTimeMs > externalHrs * 3600000;
+    }
+    return true;
+  }) || [];
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <button 
@@ -115,6 +137,18 @@ export default function AgentDetailedAnalyticsPage() {
               onChange={(e) => setEndDate(e.target.value)}
               title="End Date"
             />
+            <div className="h-4 w-px bg-slate-200 mx-1"></div>
+            <select 
+              value={slaFilter}
+              onChange={(e) => setSlaFilter(e.target.value)}
+              className="text-sm border-0 focus:ring-0 p-1 text-slate-700 bg-transparent cursor-pointer outline-none"
+            >
+              <option value="ALL">All Tickets</option>
+              <option value="INTERNAL_MET">Internal SLA</option>
+              <option value="INTERNAL_MISSED">Over Time Internal SLA</option>
+              <option value="EXTERNAL_MET">External SLA</option>
+              <option value="EXTERNAL_MISSED">Over Time External SLA</option>
+            </select>
           </div>
         </div>
         <div className="flex gap-4">
@@ -140,7 +174,7 @@ export default function AgentDetailedAnalyticsPage() {
           <h2 className="text-sm font-bold text-slate-800">Closed Tickets Log</h2>
         </div>
         
-        {agentStats.closedTickets && agentStats.closedTickets.length > 0 ? (
+        {filteredTickets.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
               <thead className="bg-white border-b border-slate-200 text-xs uppercase text-slate-500 font-semibold">
@@ -154,7 +188,7 @@ export default function AgentDetailedAnalyticsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {agentStats.closedTickets.map((ticket: any) => (
+                {filteredTickets.map((ticket: any) => (
                   <tr key={ticket._id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4 font-medium text-indigo-600">
                       <Link href={`/admin/tracker?search=${ticket.ticketNumber}`} className="hover:underline">

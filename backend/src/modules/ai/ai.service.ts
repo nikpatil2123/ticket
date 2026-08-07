@@ -6,12 +6,20 @@ import Groq from 'groq-sdk';
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
-  private groq: Groq;
+  private groqClients: Groq[] = [];
+  private currentClientIndex: number = 0;
 
   constructor(private configService: ConfigService) {
-    this.groq = new Groq({
-      apiKey: this.configService.get<string>('groq.apiKey'),
-    });
+    const apiKeys = this.configService.get<string[]>('groq.apiKeys') || [];
+    const fallbackKey = this.configService.get<string>('groq.apiKey');
+
+    if (apiKeys.length > 0) {
+      this.groqClients = apiKeys.map((key) => new Groq({ apiKey: key }));
+    } else if (fallbackKey) {
+      this.groqClients = [new Groq({ apiKey: fallbackKey })];
+    } else {
+      this.logger.warn('No Groq API keys found in configuration.');
+    }
   }
 
   async classifyEmail(
@@ -57,7 +65,14 @@ export class AiService {
       Email Body: "${bodyText.substring(0, 2000)}" // Truncated to avoid token limits
       `;
 
-      const chatCompletion = await this.groq.chat.completions.create({
+      if (this.groqClients.length === 0) {
+        throw new Error('Groq clients not initialized');
+      }
+
+      const client = this.groqClients[this.currentClientIndex];
+      this.currentClientIndex = (this.currentClientIndex + 1) % this.groqClients.length;
+
+      const chatCompletion = await client.chat.completions.create({
         messages: [{ role: 'user', content: prompt }],
         model: 'llama-3.1-8b-instant',
         temperature: 0.1,
