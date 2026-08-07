@@ -24,7 +24,7 @@ export enum TicketPriority {
 
 @Schema({ timestamps: true })
 export class Ticket extends Document {
-  @Prop({ unique: true, sparse: true })
+  @Prop()
   ticketNumber: string;
 
   @Prop({ required: true, index: true })
@@ -63,7 +63,7 @@ export class Ticket extends Document {
   @Prop({ type: [String], default: [] })
   tags: string[];
 
-  @Prop({ unique: true, sparse: true })
+  @Prop()
   threadId: string;
 
   @Prop({ type: Date, default: null })

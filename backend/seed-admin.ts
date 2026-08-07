@@ -15,11 +15,25 @@ async function createAdmin() {
   // CLI Arguments or defaults
   const args = process.argv.slice(2);
   const email = args[0] || 'admin@paruluniversity.ac.in';
-  const password = args[1] || 'password123';
+  const password = args[1] || 'Admin@1234!';
   const firstName = args[2] || 'Admin';
   const lastName = args[3] || 'User';
 
   console.log(`Creating Admin user: ${email}...`);
+
+  // Ensure default Department exists
+  let department = await db.collection('departments').findOne({ name: 'System Administration' });
+  if (!department) {
+    const deptRes = await db.collection('departments').insertOne({
+      name: 'System Administration',
+      description: 'Default department for system admins',
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    department = { _id: deptRes.insertedId, name: 'System Administration' };
+    console.log('Created System Administration department.');
+  }
 
   // Ensure ADMIN role exists
   let adminRole = await db.collection('roles').findOne({ name: 'ADMIN' });
@@ -47,12 +61,13 @@ async function createAdmin() {
         $set: { 
           passwordHash,
           roleId: adminRole._id,
+          departmentId: department._id,
           isActive: true,
           updatedAt: new Date()
         } 
       }
     );
-    console.log(`Successfully updated existing user ${email} with ADMIN role & new password!`);
+    console.log(`Successfully updated existing user ${email} with ADMIN role, department & new password!`);
   } else {
     await db.collection('users').insertOne({
       email,
@@ -60,6 +75,7 @@ async function createAdmin() {
       firstName,
       lastName,
       roleId: adminRole._id,
+      departmentId: department._id,
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date()

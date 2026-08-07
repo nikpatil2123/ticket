@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { apiClient } from '@/lib/api/api-client';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -14,16 +15,11 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/v1';
-      const res = await fetch(`${baseUrl}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-      if (!res.ok) throw new Error('Invalid credentials');
+      const res = await apiClient.post('/auth/login', { email, password });
+      const data = res.data;
       
-      const data = await res.json();
-      localStorage.setItem('token', data.access_token);
+      // Token is now set securely via HttpOnly cookie by the backend.
+      // We only store non-sensitive user metadata in localStorage.
       localStorage.setItem('user', JSON.stringify(data.user));
       
       // Redirect based on role

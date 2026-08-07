@@ -1,14 +1,15 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { EmailService } from './email.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('v1/email')
+@UseGuards(JwtAuthGuard)
 export class EmailController {
   constructor(private readonly emailService: EmailService) {}
 
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
   async handleWebhook(@Body() payload: any) {
-    // This responds quickly with 200 OK to acknowledge receipt to Pub/Sub
     await this.emailService.handleWebhook(payload);
     return { status: 'received' };
   }

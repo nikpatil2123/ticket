@@ -31,7 +31,7 @@ export class UsersService {
     }
 
     const salt = await bcrypt.genSalt(12);
-    const passwordToHash = (createUserDto as any).password || 'password123';
+    const passwordToHash = (createUserDto as any).password || 'Parul@123';
     const passwordHash = await bcrypt.hash(passwordToHash, salt);
 
     return this.usersRepository.create({
@@ -42,7 +42,8 @@ export class UsersService {
   }
 
   async getAllUsers(): Promise<User[]> {
-    return this.usersRepository.findAll();
+    const users = await this.usersRepository.findAll();
+    return users.map((user) => (user as any).toObject());
   }
 
   async getUserById(id: string): Promise<User> {

@@ -5,15 +5,21 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true,
 });
 
-// We can add interceptors here later to inject the JWT Bearer token
-apiClient.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+// We no longer manually attach the JWT token from localStorage.
+// The browser will automatically send the HttpOnly 'token' cookie with every request.
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
     }
+    return Promise.reject(error);
   }
-  return config;
-});
+);

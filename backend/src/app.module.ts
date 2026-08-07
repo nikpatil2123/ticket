@@ -13,9 +13,25 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { AiModule } from './modules/ai/ai.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { TemplatesModule } from './modules/templates/templates.module';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+import { TerminusModule } from '@nestjs/terminus';
+import { LoggerModule } from 'nestjs-pino';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
+    LoggerModule.forRoot({
+      pinoHttp: {
+        transport: process.env.NODE_ENV !== 'production'
+          ? { target: 'pino-pretty', options: { colorize: true } }
+          : undefined,
+      },
+    }),
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 100,
+    }]),
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
@@ -47,8 +63,14 @@ import { TemplatesModule } from './modules/templates/templates.module';
     AiModule,
     AuthModule,
     TemplatesModule,
+    TerminusModule,
   ],
-  controllers: [],
-  providers: [],
+  controllers: [HealthController],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}

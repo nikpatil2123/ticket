@@ -4,11 +4,14 @@ import { Role } from './role.schema';
 import { Department } from './department.schema';
 import { Team } from './team.schema';
 
+import { Exclude } from 'class-transformer';
+
 @Schema({ timestamps: true })
 export class User extends Document {
-  @Prop({ required: true, unique: true })
+  @Prop({ required: true })
   email: string;
 
+  @Exclude()
   @Prop({ required: true })
   passwordHash: string;
 

@@ -14,6 +14,10 @@ import {
   SystemSettingsSchema,
 } from './schemas/system-settings.schema';
 import { UsersModule } from '../users/users.module';
+import {
+  BlacklistedToken,
+  BlacklistedTokenSchema,
+} from './schemas/blacklisted-token.schema';
 
 @Module({
   imports: [
@@ -23,15 +27,14 @@ import { UsersModule } from '../users/users.module';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
-        secret:
-          configService.get<string>('jwt.secret') ||
-          'super_secret_for_development',
-        signOptions: { expiresIn: '1d' },
+        secret: configService.get<string>('jwt.secret'),
+        signOptions: { expiresIn: '7d' },
       }),
       inject: [ConfigService],
     }),
     MongooseModule.forFeature([
       { name: SystemSettings.name, schema: SystemSettingsSchema },
+      { name: BlacklistedToken.name, schema: BlacklistedTokenSchema },
     ]),
   ],
   controllers: [GoogleAuthController, AuthController],
