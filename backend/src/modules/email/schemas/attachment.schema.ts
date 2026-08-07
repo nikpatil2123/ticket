@@ -4,7 +4,12 @@ import { Message } from '../../tickets/schemas/message.schema';
 
 @Schema({ timestamps: true })
 export class Attachment extends Document {
-  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Message', required: true, index: true })
+  @Prop({
+    type: MongooseSchema.Types.ObjectId,
+    ref: 'Message',
+    required: true,
+    index: true,
+  })
   messageId: MongooseSchema.Types.ObjectId | Message;
 
   @Prop({ required: true })

@@ -10,4 +10,5 @@ export class SystemSettings extends Document {
   value: Record<string, any>;
 }
 
-export const SystemSettingsSchema = SchemaFactory.createForClass(SystemSettings);
+export const SystemSettingsSchema =
+  SchemaFactory.createForClass(SystemSettings);

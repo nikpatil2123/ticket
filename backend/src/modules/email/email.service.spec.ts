@@ -28,18 +28,22 @@ describe('EmailService', () => {
     it('should extract historyId and enqueue job', async () => {
       const payload = {
         message: {
-          data: Buffer.from(JSON.stringify({ historyId: '12345' })).toString('base64'),
+          data: Buffer.from(JSON.stringify({ historyId: '12345' })).toString(
+            'base64',
+          ),
         },
       };
 
       await service.handleWebhook(payload);
 
-      expect(emailQueue.add).toHaveBeenCalledWith('fetch-history', { historyId: '12345' });
+      expect(emailQueue.add).toHaveBeenCalledWith('fetch-history', {
+        historyId: '12345',
+      });
     });
 
     it('should not throw if payload is invalid', async () => {
       const payload = { message: { data: 'invalid-base64' } };
-      
+
       // Should catch error internally and log it, not crash the app
       await expect(service.handleWebhook(payload)).resolves.not.toThrow();
       expect(emailQueue.add).not.toHaveBeenCalled();

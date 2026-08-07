@@ -103,7 +103,7 @@ export default function TicketTrackerPage() {
             <div className="bg-muted p-3 rounded-lg border text-xs space-y-1">
               <div><span className="font-semibold">Assigned Department:</span> {result.ticket.departmentId?.name || 'Unassigned'}</div>
               <div><span className="font-semibold">Created At:</span> {new Date(result.ticket.createdAt).toLocaleString()}</div>
-              <div><span className="font-semibold">AI Intent:</span> {result.ticket.aiClassification?.intent || 'MIS'}</div>
+              <div><span className="font-semibold">AI Intent:</span> {result.ticket.aiClassification?.intent || 'UNASSIGNED'}</div>
             </div>
           </div>
 

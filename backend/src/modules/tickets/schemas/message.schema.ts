@@ -11,7 +11,12 @@ export enum MessageDirection {
 
 @Schema({ timestamps: true })
 export class Message extends Document {
-  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Ticket', required: true, index: true })
+  @Prop({
+    type: MongooseSchema.Types.ObjectId,
+    ref: 'Ticket',
+    required: true,
+    index: true,
+  })
   ticketId: Ticket;
 
   @Prop({ required: true, unique: true })

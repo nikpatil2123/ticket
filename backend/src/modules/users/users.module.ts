@@ -22,7 +22,12 @@ import { DepartmentsRepository } from './departments.repository';
     ]),
   ],
   controllers: [UsersController, DepartmentsController],
-  providers: [UsersService, UsersRepository, DepartmentsService, DepartmentsRepository],
+  providers: [
+    UsersService,
+    UsersRepository,
+    DepartmentsService,
+    DepartmentsRepository,
+  ],
   exports: [UsersService, DepartmentsService],
 })
 export class UsersModule {}

@@ -12,7 +12,8 @@ export class GoogleAuthService {
 
   constructor(
     private configService: ConfigService,
-    @InjectModel(SystemSettings.name) private settingsModel: Model<SystemSettings>
+    @InjectModel(SystemSettings.name)
+    private settingsModel: Model<SystemSettings>,
   ) {
     const clientId = this.configService.get<string>('google.clientId');
     const clientSecret = this.configService.get<string>('google.clientSecret');
@@ -21,7 +22,7 @@ export class GoogleAuthService {
     this.oauth2Client = new google.auth.OAuth2(
       clientId,
       clientSecret,
-      redirectUri
+      redirectUri,
     );
   }
 
@@ -30,7 +31,7 @@ export class GoogleAuthService {
       'https://www.googleapis.com/auth/gmail.readonly',
       'https://www.googleapis.com/auth/gmail.send',
       'https://www.googleapis.com/auth/gmail.modify',
-      'https://www.googleapis.com/auth/drive.file'
+      'https://www.googleapis.com/auth/drive.file',
     ];
 
     return this.oauth2Client.generateAuthUrl({
@@ -43,21 +44,25 @@ export class GoogleAuthService {
   async exchangeCodeForTokens(code: string): Promise<any> {
     const { tokens } = await this.oauth2Client.getToken(code);
     this.logger.log('Successfully exchanged code for Google OAuth tokens');
-    
+
     // Save tokens securely in DB
     await this.settingsModel.findOneAndUpdate(
       { key: 'google_oauth_tokens' },
       { $set: { value: tokens } },
-      { upsert: true, returnDocument: 'after' }
+      { upsert: true, returnDocument: 'after' },
     );
     this.logger.log('Tokens saved to database');
     return tokens;
   }
-  
+
   async getAuthClient() {
-    const settings = await this.settingsModel.findOne({ key: 'google_oauth_tokens' });
+    const settings = await this.settingsModel.findOne({
+      key: 'google_oauth_tokens',
+    });
     if (!settings || !settings.value) {
-      throw new Error('Google OAuth tokens not found in database. User must connect Google Workspace.');
+      throw new Error(
+        'Google OAuth tokens not found in database. User must connect Google Workspace.',
+      );
     }
     this.oauth2Client.setCredentials(settings.value);
     return this.oauth2Client;

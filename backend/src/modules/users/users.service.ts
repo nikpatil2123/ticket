@@ -1,4 +1,8 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { UsersRepository } from './users.repository';
 import { CreateUserDto } from './dto/create-user.dto';
 import * as bcrypt from 'bcrypt';
@@ -9,14 +13,18 @@ export class UsersService {
   constructor(private readonly usersRepository: UsersRepository) {}
 
   async createUser(createUserDto: CreateUserDto): Promise<User> {
-    const existingUser = await this.usersRepository.findByEmail(createUserDto.email);
+    const existingUser = await this.usersRepository.findByEmail(
+      createUserDto.email,
+    );
     if (existingUser) {
       throw new ConflictException('User with this email already exists');
     }
 
     let roleId = createUserDto.roleId;
     if (!roleId && (createUserDto as any).role) {
-      const role = await this.usersRepository.findRoleByName((createUserDto as any).role);
+      const role = await this.usersRepository.findRoleByName(
+        (createUserDto as any).role,
+      );
       if (role) {
         roleId = (role as any)._id.toString();
       }

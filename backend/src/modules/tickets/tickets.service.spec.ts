@@ -33,24 +33,48 @@ describe('TicketsService', () => {
   describe('updateStatus', () => {
     it('should throw NotFoundException if ticket does not exist', async () => {
       repository.findTicketById.mockResolvedValue(null);
-      await expect(service.updateStatus('1', { status: TicketStatus.RESOLVED }, 'actor1'))
-        .rejects.toThrow(NotFoundException);
+      await expect(
+        service.updateStatus('1', { status: TicketStatus.RESOLVED }, 'actor1'),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should throw BadRequestException if ticket is already CLOSED', async () => {
-      repository.findTicketById.mockResolvedValue({ status: TicketStatus.CLOSED } as any);
-      await expect(service.updateStatus('1', { status: TicketStatus.RESOLVED }, 'actor1'))
-        .rejects.toThrow(BadRequestException);
+      repository.findTicketById.mockResolvedValue({
+        status: TicketStatus.CLOSED,
+      } as any);
+      await expect(
+        service.updateStatus('1', { status: TicketStatus.RESOLVED }, 'actor1'),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should update status and log activity', async () => {
-      repository.findTicketById.mockResolvedValue({ id: '1', status: TicketStatus.OPEN } as any);
-      repository.updateTicketStatus.mockResolvedValue({ id: '1', status: TicketStatus.RESOLVED } as any);
+      repository.findTicketById.mockResolvedValue({
+        id: '1',
+        status: TicketStatus.OPEN,
+      } as any);
+      repository.updateTicketStatus.mockResolvedValue({
+        id: '1',
+        status: TicketStatus.RESOLVED,
+      } as any);
 
-      const result = await service.updateStatus('1', { status: TicketStatus.RESOLVED }, 'actor1');
-      
-      expect(repository.updateTicketStatus).toHaveBeenCalledWith('1', TicketStatus.RESOLVED, expect.any(Date));
-      expect(repository.logActivity).toHaveBeenCalledWith('1', 'actor1', 'STATUS_CHANGED', { oldStatus: TicketStatus.OPEN, newStatus: TicketStatus.RESOLVED }, undefined);
+      const result = await service.updateStatus(
+        '1',
+        { status: TicketStatus.RESOLVED },
+        'actor1',
+      );
+
+      expect(repository.updateTicketStatus).toHaveBeenCalledWith(
+        '1',
+        TicketStatus.RESOLVED,
+        expect.any(Date),
+      );
+      expect(repository.logActivity).toHaveBeenCalledWith(
+        '1',
+        'actor1',
+        'STATUS_CHANGED',
+        { oldStatus: TicketStatus.OPEN, newStatus: TicketStatus.RESOLVED },
+        undefined,
+      );
       expect(result.status).toBe(TicketStatus.RESOLVED);
     });
   });

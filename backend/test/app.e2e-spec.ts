@@ -17,9 +17,7 @@ describe('App (e2e)', () => {
   });
 
   it('/v1/tickets (GET) should require auth', () => {
-    return request(app.getHttpServer())
-      .get('/v1/tickets')
-      .expect(401);
+    return request(app.getHttpServer()).get('/v1/tickets').expect(401);
   });
 
   afterEach(async () => {

@@ -18,5 +18,5 @@ export default () => ({
   groq: {
     apiKey: process.env.GROQ_API_KEY,
     useGroq: process.env.USE_GROQ_API !== 'false',
-  }
+  },
 });

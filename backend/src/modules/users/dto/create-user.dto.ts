@@ -1,4 +1,11 @@
-import { IsEmail, IsNotEmpty, IsString, IsMongoId, IsOptional, IsBoolean } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsString,
+  IsMongoId,
+  IsOptional,
+  IsBoolean,
+} from 'class-validator';
 
 export class CreateUserDto {
   @IsEmail()

@@ -38,20 +38,28 @@ describe('UsersService', () => {
 
   describe('createUser', () => {
     it('should throw ConflictException if user already exists', async () => {
-      repository.findByEmail.mockResolvedValue({ id: '1', email: 'test@test.com' } as any);
-
-      await expect(service.createUser({
+      repository.findByEmail.mockResolvedValue({
+        id: '1',
         email: 'test@test.com',
-        firstName: 'John',
-        lastName: 'Doe',
-        roleId: 'role1',
-        departmentId: 'dept1'
-      })).rejects.toThrow(ConflictException);
+      } as any);
+
+      await expect(
+        service.createUser({
+          email: 'test@test.com',
+          firstName: 'John',
+          lastName: 'Doe',
+          roleId: 'role1',
+          departmentId: 'dept1',
+        }),
+      ).rejects.toThrow(ConflictException);
     });
 
     it('should hash password and create user', async () => {
       repository.findByEmail.mockResolvedValue(null);
-      repository.create.mockResolvedValue({ id: '1', email: 'new@test.com' } as any);
+      repository.create.mockResolvedValue({
+        id: '1',
+        email: 'new@test.com',
+      } as any);
       (bcrypt.genSalt as jest.Mock).mockResolvedValue('salt');
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
 
@@ -60,14 +68,16 @@ describe('UsersService', () => {
         firstName: 'Jane',
         lastName: 'Doe',
         roleId: 'role1',
-        departmentId: 'dept1'
+        departmentId: 'dept1',
       });
 
       expect(bcrypt.hash).toHaveBeenCalled();
-      expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({
-        email: 'new@test.com',
-        passwordHash: 'hashedPassword',
-      }));
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: 'new@test.com',
+          passwordHash: 'hashedPassword',
+        }),
+      );
       expect(result._id).toBe('1');
     });
   });

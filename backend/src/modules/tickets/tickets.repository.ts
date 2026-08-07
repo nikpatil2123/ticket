@@ -27,10 +27,15 @@ export class TicketsRepository {
       .exec();
   }
 
-  async getTicketStats(departmentId?: string): Promise<any[]> {
+  async getTicketStats(departmentId?: string, startDate?: string, endDate?: string): Promise<any[]> {
     const matchStage: any = {};
     if (departmentId) {
       matchStage.departmentId = new mongoose.Types.ObjectId(departmentId);
+    }
+    if (startDate || endDate) {
+      matchStage.createdAt = {};
+      if (startDate) matchStage.createdAt.$gte = new Date(startDate);
+      if (endDate) matchStage.createdAt.$lte = new Date(endDate);
     }
     return this.ticketModel
       .aggregate([
@@ -40,7 +45,22 @@ export class TicketsRepository {
       .exec();
   }
 
-  async getAgentStats(): Promise<any[]> {
+  async getAgentStats(startDate?: string, endDate?: string): Promise<any[]> {
+    const ticketMatchConditions: any[] = [
+      { $eq: ['$assignedTo', '$$userId'] },
+      { $in: ['$status', ['CLOSED', 'RESOLVED']] },
+    ];
+    
+    // Pass string parameters instead of Date objects to avoid serialization issues inside $expr if needed, 
+    // but standard $match allows normal Date queries if placed outside $expr. 
+    // Let's use a standard $match for the dates.
+    const dateMatch: any = {};
+    if (startDate || endDate) {
+      dateMatch.createdAt = {};
+      if (startDate) dateMatch.createdAt.$gte = new Date(startDate);
+      if (endDate) dateMatch.createdAt.$lte = new Date(endDate);
+    }
+
     return this.ticketModel.db
       .collection('users')
       .aggregate([
@@ -51,11 +71,9 @@ export class TicketsRepository {
             pipeline: [
               {
                 $match: {
+                  ...dateMatch,
                   $expr: {
-                    $and: [
-                      { $eq: ['$assignedTo', '$$userId'] },
-                      { $in: ['$status', ['CLOSED', 'RESOLVED']] },
-                    ],
+                    $and: ticketMatchConditions,
                   },
                 },
               },
@@ -179,8 +197,16 @@ export class TicketsRepository {
       .exec();
   }
 
-  async getAgentDetailedStats(agentId: string): Promise<any> {
+  async getAgentDetailedStats(agentId: string, startDate?: string, endDate?: string): Promise<any> {
     const mongoose = require('mongoose');
+    
+    const dateMatch: any = {};
+    if (startDate || endDate) {
+      dateMatch.createdAt = {};
+      if (startDate) dateMatch.createdAt.$gte = new Date(startDate);
+      if (endDate) dateMatch.createdAt.$lte = new Date(endDate);
+    }
+
     const result = await this.ticketModel.db
       .collection('users')
       .aggregate([
@@ -194,6 +220,7 @@ export class TicketsRepository {
             pipeline: [
               {
                 $match: {
+                  ...dateMatch,
                   $expr: {
                     $and: [
                       { $eq: ['$assignedTo', '$$userId'] },
@@ -434,7 +461,7 @@ export class TicketsRepository {
         const db = this.ticketModel.db;
         const dept = await db
           .collection('departments')
-          .findOne({ name: intentName });
+          .findOne({ name: { $regex: new RegExp(`^${intentName}$`, 'i') } });
         if (dept) deptId = dept._id;
       }
     } catch (e) {

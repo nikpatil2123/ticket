@@ -135,7 +135,7 @@ export default function DepartmentsPage() {
                 <input 
                   type="text"
                   required
-                  placeholder="e.g. MIS, LMS, Billing"
+                  placeholder="e.g. SALARY, LEAVE, Billing"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full px-3 py-2 border rounded-md text-sm bg-transparent"
@@ -155,7 +155,7 @@ export default function DepartmentsPage() {
                 <label className="block text-sm font-medium mb-1">Support Email Alias</label>
                 <input 
                   type="email"
-                  placeholder="e.g. lms-support@acme.com"
+                  placeholder="e.g. salary-support@acme.com"
                   value={formData.supportEmailAlias}
                   onChange={(e) => setFormData({ ...formData, supportEmailAlias: e.target.value })}
                   className="w-full px-3 py-2 border rounded-md text-sm bg-transparent"

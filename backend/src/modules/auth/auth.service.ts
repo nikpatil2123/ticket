@@ -7,12 +7,12 @@ import * as bcrypt from 'bcrypt';
 export class AuthService {
   constructor(
     private usersService: UsersService,
-    private jwtService: JwtService
+    private jwtService: JwtService,
   ) {}
 
   async validateUser(email: string, pass: string): Promise<any> {
     const user = await this.usersService.findByEmail(email);
-    if (user && await bcrypt.compare(pass, user.passwordHash)) {
+    if (user && (await bcrypt.compare(pass, user.passwordHash))) {
       const { passwordHash, ...result } = user.toObject();
       return result;
     }
@@ -20,11 +20,11 @@ export class AuthService {
   }
 
   async login(user: any) {
-    const payload = { 
-      email: user.email, 
+    const payload = {
+      email: user.email,
       sub: user._id,
       role: user.roleId?.name || 'AGENT',
-      departmentId: user.departmentId?._id || user.departmentId
+      departmentId: user.departmentId?._id || user.departmentId,
     };
     return {
       access_token: this.jwtService.sign(payload),
@@ -34,8 +34,8 @@ export class AuthService {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.roleId?.name,
-        departmentId: user.departmentId?._id || user.departmentId
-      }
+        departmentId: user.departmentId?._id || user.departmentId,
+      },
     };
   }
 }

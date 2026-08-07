@@ -8,7 +8,10 @@ import { Message, MessageSchema } from './schemas/message.schema';
 import { ActivityLog, ActivityLogSchema } from './schemas/activity-log.schema';
 import { AuthModule } from '../auth/auth.module';
 
-import { Attachment, AttachmentSchema } from '../email/schemas/attachment.schema';
+import {
+  Attachment,
+  AttachmentSchema,
+} from '../email/schemas/attachment.schema';
 
 @Module({
   imports: [
@@ -18,7 +21,7 @@ import { Attachment, AttachmentSchema } from '../email/schemas/attachment.schema
       { name: ActivityLog.name, schema: ActivityLogSchema },
       { name: Attachment.name, schema: AttachmentSchema },
     ]),
-    AuthModule
+    AuthModule,
   ],
   controllers: [TicketsController],
   providers: [TicketsService, TicketsRepository],

@@ -8,7 +8,7 @@ import { Role } from './schemas/role.schema';
 export class UsersRepository {
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
-    @InjectModel(Role.name) private roleModel: Model<Role>
+    @InjectModel(Role.name) private roleModel: Model<Role>,
   ) {}
 
   async create(user: Partial<User>): Promise<User> {
@@ -21,7 +21,10 @@ export class UsersRepository {
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.userModel.findOne({ email }).populate('roleId departmentId').exec();
+    return this.userModel
+      .findOne({ email })
+      .populate('roleId departmentId')
+      .exec();
   }
 
   async findById(id: string): Promise<User | null> {
@@ -33,7 +36,10 @@ export class UsersRepository {
   }
 
   async update(id: string, data: Partial<User>): Promise<User | null> {
-    return this.userModel.findByIdAndUpdate(id, data, { returnDocument: 'after' }).populate('roleId departmentId teamId').exec();
+    return this.userModel
+      .findByIdAndUpdate(id, data, { returnDocument: 'after' })
+      .populate('roleId departmentId teamId')
+      .exec();
   }
 
   async delete(id: string): Promise<any> {

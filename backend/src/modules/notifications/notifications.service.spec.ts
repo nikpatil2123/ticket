@@ -26,17 +26,24 @@ describe('NotificationsService', () => {
 
   describe('sendNotification', () => {
     it('should enqueue a notification job', async () => {
-      await service.sendNotification('WELCOME_EMAIL', 'user-1', { name: 'John' });
-      expect(notificationsQueue.add).toHaveBeenCalledWith('dispatch-notification', {
-        templateName: 'WELCOME_EMAIL',
-        recipientId: 'user-1',
-        variables: { name: 'John' },
+      await service.sendNotification('WELCOME_EMAIL', 'user-1', {
+        name: 'John',
       });
+      expect(notificationsQueue.add).toHaveBeenCalledWith(
+        'dispatch-notification',
+        {
+          templateName: 'WELCOME_EMAIL',
+          recipientId: 'user-1',
+          variables: { name: 'John' },
+        },
+      );
     });
 
     it('should swallow errors if enqueue fails', async () => {
       notificationsQueue.add.mockRejectedValue(new Error('Redis down'));
-      await expect(service.sendNotification('WELCOME_EMAIL', 'user-1', {})).resolves.not.toThrow();
+      await expect(
+        service.sendNotification('WELCOME_EMAIL', 'user-1', {}),
+      ).resolves.not.toThrow();
     });
   });
 });

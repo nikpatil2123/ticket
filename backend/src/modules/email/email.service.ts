@@ -171,8 +171,7 @@ export class EmailService implements OnModuleInit, OnModuleDestroy {
         const messageData: any = msgRes.data;
 
         const subject =
-          this.findHeaderRecursive(messageData.payload, 'Subject') ||
-          'No Subject';
+          this.findHeaderRecursive(messageData.payload, 'Subject') || '(no subject)';
         const from =
           this.findHeaderRecursive(messageData.payload, 'From') || 'Unknown';
         const messageId = this.findHeaderRecursive(

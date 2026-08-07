@@ -7,15 +7,20 @@ import { Loader2, Ticket, CheckCircle2, Clock, Inbox, AlertCircle, Archive } fro
 export default function AnalyticsDashboardPage() {
   const [stats, setStats] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   useEffect(() => {
     fetchStats();
-  }, []);
+  }, [startDate, endDate]);
 
   const fetchStats = async () => {
     try {
       setIsLoading(true);
-      const res = await apiClient.get('/tickets/stats');
+      const params = new URLSearchParams();
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      const res = await apiClient.get(`/tickets/stats?${params.toString()}`);
       setStats(res.data.data);
     } catch (err) {
       console.error('Failed to load stats', err);
@@ -24,7 +29,7 @@ export default function AnalyticsDashboardPage() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading && !stats) {
     return <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-slate-400" /></div>;
   }
 
@@ -32,9 +37,28 @@ export default function AnalyticsDashboardPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Analytics Dashboard</h1>
-        <p className="text-sm text-slate-500 mt-1">Overview of ticketing statistics across all departments.</p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Analytics Dashboard</h1>
+          <p className="text-sm text-slate-500 mt-1">Overview of ticketing statistics across all departments.</p>
+        </div>
+        <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
+          <input 
+            type="date" 
+            className="text-sm border-0 focus:ring-0 p-1 text-slate-700" 
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            title="Start Date"
+          />
+          <span className="text-slate-400 text-sm">to</span>
+          <input 
+            type="date" 
+            className="text-sm border-0 focus:ring-0 p-1 text-slate-700" 
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            title="End Date"
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

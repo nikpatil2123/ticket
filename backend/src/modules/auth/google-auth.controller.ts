@@ -1,4 +1,12 @@
-import { Controller, Get, Query, Res, Req, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Query,
+  Res,
+  Req,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { GoogleAuthService } from './google-auth.service';
 
@@ -18,15 +26,17 @@ export class GoogleAuthController {
     if (!code) {
       throw new HttpException('No code provided', HttpStatus.BAD_REQUEST);
     }
-    
+
     try {
       const tokens = await this.googleAuthService.exchangeCodeForTokens(code);
-      
+
       // In a real application, you would store these tokens against a specific
       // system settings record (e.g., 'helpdesk-email-settings') in MongoDB.
-      
+
       // For now, redirect back to the frontend with success
-      res.redirect('http://localhost:3000/admin/departments?googleAuth=success');
+      res.redirect(
+        'http://localhost:3000/admin/departments?googleAuth=success',
+      );
     } catch (error) {
       res.redirect('http://localhost:3000/admin/departments?googleAuth=error');
     }

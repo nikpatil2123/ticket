@@ -6,7 +6,8 @@ import { SystemSettings } from '../auth/schemas/system-settings.schema';
 @Injectable()
 export class SettingsService {
   constructor(
-    @InjectModel(SystemSettings.name) private settingsModel: Model<SystemSettings>
+    @InjectModel(SystemSettings.name)
+    private settingsModel: Model<SystemSettings>,
   ) {}
 
   async getSetting(key: string): Promise<any> {
@@ -18,7 +19,7 @@ export class SettingsService {
     return this.settingsModel.findOneAndUpdate(
       { key },
       { $set: { value } },
-      { upsert: true, returnDocument: 'after' }
+      { upsert: true, returnDocument: 'after' },
     );
   }
 }

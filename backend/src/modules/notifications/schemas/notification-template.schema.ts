@@ -24,4 +24,5 @@ export class NotificationTemplate extends Document {
   isActive: boolean;
 }
 
-export const NotificationTemplateSchema = SchemaFactory.createForClass(NotificationTemplate);
+export const NotificationTemplateSchema =
+  SchemaFactory.createForClass(NotificationTemplate);

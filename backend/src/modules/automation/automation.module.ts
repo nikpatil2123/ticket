@@ -1,7 +1,10 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AutomationService } from './automation.service';
-import { AutomationRule, AutomationRuleSchema } from './schemas/automation-rule.schema';
+import {
+  AutomationRule,
+  AutomationRuleSchema,
+} from './schemas/automation-rule.schema';
 import { TicketsModule } from '../tickets/tickets.module';
 
 @Module({

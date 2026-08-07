@@ -1,7 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AutomationService } from './automation.service';
 import { TicketsService } from '../tickets/tickets.service';
-import { AutomationEvent, ConditionOperator } from './schemas/automation-rule.schema';
+import {
+  AutomationEvent,
+  ConditionOperator,
+} from './schemas/automation-rule.schema';
 import { getModelToken } from '@nestjs/mongoose';
 
 describe('AutomationService', () => {
@@ -35,7 +38,7 @@ describe('AutomationService', () => {
 
     service = module.get<AutomationService>(AutomationService);
     ticketsService = module.get(TicketsService);
-    
+
     // Override the model instance property
     (service as any).automationRuleModel = mockRuleModel;
   });
@@ -45,9 +48,17 @@ describe('AutomationService', () => {
       const rule = {
         conditionLogic: 'AND',
         conditions: [
-          { field: 'status', operator: ConditionOperator.EQUALS, value: 'OPEN' },
-          { field: 'priority', operator: ConditionOperator.EQUALS, value: 'P1' }
-        ]
+          {
+            field: 'status',
+            operator: ConditionOperator.EQUALS,
+            value: 'OPEN',
+          },
+          {
+            field: 'priority',
+            operator: ConditionOperator.EQUALS,
+            value: 'P1',
+          },
+        ],
       } as any;
 
       const ticket = { status: 'OPEN', priority: 'P1' } as any;
@@ -61,8 +72,12 @@ describe('AutomationService', () => {
       const rule = {
         conditionLogic: 'AND',
         conditions: [
-          { field: 'aiClassification.intent', operator: ConditionOperator.EQUALS, value: 'Refund' }
-        ]
+          {
+            field: 'aiClassification.intent',
+            operator: ConditionOperator.EQUALS,
+            value: 'Refund',
+          },
+        ],
       } as any;
 
       const ticket = { aiClassification: { intent: 'Refund' } } as any;

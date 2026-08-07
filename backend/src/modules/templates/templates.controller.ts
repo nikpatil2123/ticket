@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Delete, Param, Body, UseGuards, Req, ForbiddenException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Param,
+  Body,
+  UseGuards,
+  Req,
+  ForbiddenException,
+} from '@nestjs/common';
 import { TemplatesService } from './templates.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -14,11 +24,18 @@ export class TemplatesController {
   }
 
   @Post()
-  async createTemplate(@Req() req: any, @Body() body: { name: string; bodyText: string }) {
+  async createTemplate(
+    @Req() req: any,
+    @Body() body: { name: string; bodyText: string },
+  ) {
     if (req.user.role !== 'ADMIN' && req.user.roleId?.name !== 'ADMIN') {
       throw new ForbiddenException('Only Admins can create templates');
     }
-    const template = await this.templatesService.create(body.name, body.bodyText, req.user.userId);
+    const template = await this.templatesService.create(
+      body.name,
+      body.bodyText,
+      req.user.userId,
+    );
     return { data: template };
   }
 

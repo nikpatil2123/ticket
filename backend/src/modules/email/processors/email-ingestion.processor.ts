@@ -29,7 +29,7 @@ export class EmailIngestionProcessor extends WorkerHost {
 
   private async handleFetchHistory(historyId: string): Promise<void> {
     this.logger.log(`Processing historyId: ${historyId}`);
-    
+
     // In production:
     // 1. Call gmail.users.history.list using OAuth credentials
     // 2. Loop through returned messageIds
@@ -37,7 +37,7 @@ export class EmailIngestionProcessor extends WorkerHost {
     // 4. Parse headers, check for spam/auto-reply
     // 5. If valid, trigger this.ticketsService to create/update ticket
     // 6. Update this.syncStateModel with the new historyId to prevent skipping
-    
+
     this.logger.log(`Successfully processed historyId: ${historyId}`);
   }
 }

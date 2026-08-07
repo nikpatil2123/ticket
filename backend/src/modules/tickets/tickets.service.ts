@@ -21,8 +21,8 @@ export class TicketsService {
     return this.ticketsRepository.findAll(departmentId, tatType);
   }
 
-  async getTicketStats(departmentId?: string): Promise<any> {
-    const rawStats = await this.ticketsRepository.getTicketStats(departmentId);
+  async getTicketStats(departmentId?: string, startDate?: string, endDate?: string): Promise<any> {
+    const rawStats = await this.ticketsRepository.getTicketStats(departmentId, startDate, endDate);
 
     // Format the stats into a friendly object
     const stats: Record<string, number> = {
@@ -45,12 +45,12 @@ export class TicketsService {
     return stats;
   }
 
-  async getAgentStats(): Promise<any[]> {
-    return this.ticketsRepository.getAgentStats();
+  async getAgentStats(startDate?: string, endDate?: string): Promise<any[]> {
+    return this.ticketsRepository.getAgentStats(startDate, endDate);
   }
 
-  async getAgentDetailedStats(agentId: string): Promise<any> {
-    const stats = await this.ticketsRepository.getAgentDetailedStats(agentId);
+  async getAgentDetailedStats(agentId: string, startDate?: string, endDate?: string): Promise<any> {
+    const stats = await this.ticketsRepository.getAgentDetailedStats(agentId, startDate, endDate);
     if (!stats) {
       throw new NotFoundException('Agent not found or no stats available');
     }
@@ -348,8 +348,8 @@ export class TicketsService {
     const profile = await gmail.users.getProfile({ userId: 'me' });
     const fromEmail = profile.data.emailAddress;
 
-    let subject = ticket.subject || 'Support Request';
-    if (subjectPrefix && !subject.toLowerCase().startsWith('re:')) {
+    let subject = (ticket.subject === 'No Subject' || ticket.subject === '(no subject)') ? '' : (ticket.subject || '');
+    if (subjectPrefix && subject && !subject.toLowerCase().startsWith('re:')) {
       subject = `${subjectPrefix} ${subject}`;
     }
 
@@ -398,8 +398,11 @@ export class TicketsService {
     const emailLines = [
       `From: ${fromEmail}`,
       `To: ${ticket.customerEmail}`,
-      `Subject: ${subject}`,
     ];
+    if (subject) {
+      const encodedSubject = `=?utf-8?B?${Buffer.from(subject, 'utf-8').toString('base64')}?=`;
+      emailLines.push(`Subject: ${encodedSubject}`);
+    }
 
     if (targetMessageId) {
       const formattedMessageId =

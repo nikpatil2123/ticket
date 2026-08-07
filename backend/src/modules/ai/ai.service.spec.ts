@@ -21,7 +21,10 @@ describe('AiService', () => {
 
   describe('classifyEmail', () => {
     it('should return a structured classification result', async () => {
-      const result = await service.classifyEmail('Need help with invoice INV-12345', 'Please refund me.');
+      const result = await service.classifyEmail(
+        'Need help with invoice INV-12345',
+        'Please refund me.',
+      );
       expect(result).toHaveProperty('intent');
       expect(result).toHaveProperty('confidenceScore');
       expect(result).toHaveProperty('extractedEntities');

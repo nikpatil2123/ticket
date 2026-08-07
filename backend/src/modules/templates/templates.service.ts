@@ -9,7 +9,11 @@ export class TemplatesService {
     @InjectModel(Template.name) private templateModel: Model<Template>,
   ) {}
 
-  async create(name: string, bodyText: string, createdBy?: string): Promise<Template> {
+  async create(
+    name: string,
+    bodyText: string,
+    createdBy?: string,
+  ): Promise<Template> {
     const template = new this.templateModel({ name, bodyText, createdBy });
     return template.save();
   }

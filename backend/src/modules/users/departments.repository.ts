@@ -5,7 +5,9 @@ import { Department } from './schemas/department.schema';
 
 @Injectable()
 export class DepartmentsRepository {
-  constructor(@InjectModel(Department.name) private deptModel: Model<Department>) {}
+  constructor(
+    @InjectModel(Department.name) private deptModel: Model<Department>,
+  ) {}
 
   async findAll(): Promise<Department[]> {
     return this.deptModel.find().exec();
@@ -20,8 +22,13 @@ export class DepartmentsRepository {
     return dept.save();
   }
 
-  async update(id: string, data: Partial<Department>): Promise<Department | null> {
-    return this.deptModel.findByIdAndUpdate(id, data, { returnDocument: 'after' }).exec();
+  async update(
+    id: string,
+    data: Partial<Department>,
+  ): Promise<Department | null> {
+    return this.deptModel
+      .findByIdAndUpdate(id, data, { returnDocument: 'after' })
+      .exec();
   }
 
   async delete(id: string): Promise<any> {

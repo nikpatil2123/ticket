@@ -12,17 +12,22 @@ export default function AgentDetailedAnalyticsPage() {
   const [agentStats, setAgentStats] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   useEffect(() => {
     if (id) {
       fetchDetailedStats();
     }
-  }, [id]);
+  }, [id, startDate, endDate]);
 
   const fetchDetailedStats = async () => {
     try {
       setIsLoading(true);
-      const res = await apiClient.get(`/tickets/agent-stats/${id}`);
+      const params = new URLSearchParams();
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      const res = await apiClient.get(`/tickets/agent-stats/${id}?${params.toString()}`);
       setAgentStats(res.data.data);
     } catch (err: any) {
       console.error('Failed to load agent detailed stats', err);
@@ -73,14 +78,33 @@ export default function AgentDetailedAnalyticsPage() {
         Back to Analytics
       </button>
 
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-indigo-100 flex items-center justify-center font-bold text-indigo-700 text-2xl shadow-sm">
-            {agentStats.agentName ? agentStats.agentName.charAt(0) : '?'}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-indigo-100 flex items-center justify-center font-bold text-indigo-700 text-2xl shadow-sm">
+              {agentStats.agentName ? agentStats.agentName.charAt(0) : '?'}
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{agentStats.agentName || 'Unknown Agent'}</h1>
+              <p className="text-sm text-slate-500">{agentStats.agentEmail}</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{agentStats.agentName || 'Unknown Agent'}</h1>
-            <p className="text-sm text-slate-500">{agentStats.agentEmail}</p>
+          <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-200 shadow-sm w-fit">
+            <input 
+              type="date" 
+              className="text-sm border-0 focus:ring-0 p-1 text-slate-700" 
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              title="Start Date"
+            />
+            <span className="text-slate-400 text-sm">to</span>
+            <input 
+              type="date" 
+              className="text-sm border-0 focus:ring-0 p-1 text-slate-700" 
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              title="End Date"
+            />
           </div>
         </div>
         <div className="flex gap-4">

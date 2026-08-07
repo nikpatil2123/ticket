@@ -8,15 +8,20 @@ export default function AgentAnalyticsPage() {
   const [stats, setStats] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   useEffect(() => {
     fetchStats();
-  }, []);
+  }, [startDate, endDate]);
 
   const fetchStats = async () => {
     try {
       setIsLoading(true);
-      const res = await apiClient.get('/tickets/agent-stats');
+      const params = new URLSearchParams();
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      const res = await apiClient.get(`/tickets/agent-stats?${params.toString()}`);
       setStats(res.data.data);
     } catch (err: any) {
       console.error('Failed to load agent stats', err);
@@ -39,7 +44,7 @@ export default function AgentAnalyticsPage() {
     return `${seconds}s`;
   };
 
-  if (isLoading) {
+  if (isLoading && stats.length === 0 && !error) {
     return <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-slate-400" /></div>;
   }
 
@@ -49,9 +54,28 @@ export default function AgentAnalyticsPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Agent Analytics</h1>
-        <p className="text-sm text-slate-500 mt-1">Track individual agent performance and SLA compliance.</p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Agent Analytics</h1>
+          <p className="text-sm text-slate-500 mt-1">Track individual agent performance and SLA compliance.</p>
+        </div>
+        <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
+          <input 
+            type="date" 
+            className="text-sm border-0 focus:ring-0 p-1 text-slate-700" 
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            title="Start Date"
+          />
+          <span className="text-slate-400 text-sm">to</span>
+          <input 
+            type="date" 
+            className="text-sm border-0 focus:ring-0 p-1 text-slate-700" 
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            title="End Date"
+          />
+        </div>
       </div>
 
       {stats.length === 0 ? (

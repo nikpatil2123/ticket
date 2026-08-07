@@ -64,4 +64,5 @@ export class AutomationRule extends Document {
   actions: Action[];
 }
 
-export const AutomationRuleSchema = SchemaFactory.createForClass(AutomationRule);
+export const AutomationRuleSchema =
+  SchemaFactory.createForClass(AutomationRule);

@@ -1,4 +1,14 @@
-import { Controller, Get, Param, Put, Body, Post, Req, UseGuards, HttpException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Put,
+  Body,
+  Post,
+  Req,
+  UseGuards,
+  HttpException,
+} from '@nestjs/common';
 import { TicketsService } from './tickets.service';
 import { UpdateTicketStatusDto } from './dto/update-ticket-status.dto';
 import { GoogleAuthService } from '../auth/google-auth.service';
@@ -9,21 +19,31 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 export class TicketsController {
   constructor(
     private readonly ticketsService: TicketsService,
-    private readonly googleAuthService: GoogleAuthService
+    private readonly googleAuthService: GoogleAuthService,
   ) {}
 
   @Get()
   async getAllTickets(@Req() req: any) {
-    const departmentId = req.user.role === 'ADMIN' ? req.query.departmentId : req.user.departmentId;
+    const departmentId =
+      req.user.role === 'ADMIN'
+        ? req.query.departmentId
+        : req.user.departmentId;
     const tatType = req.query.tatType;
-    const tickets = await this.ticketsService.getAllTickets(departmentId, tatType);
+    const tickets = await this.ticketsService.getAllTickets(
+      departmentId,
+      tatType,
+    );
     return { data: tickets };
   }
 
   @Get('stats')
   async getTicketStats(@Req() req: any) {
-    const departmentId = req.user.role === 'ADMIN' ? req.query.departmentId : req.user.departmentId;
-    const stats = await this.ticketsService.getTicketStats(departmentId);
+    const departmentId =
+      req.user.role === 'ADMIN'
+        ? req.query.departmentId
+        : req.user.departmentId;
+    const { startDate, endDate } = req.query;
+    const stats = await this.ticketsService.getTicketStats(departmentId, startDate, endDate);
     return { data: stats };
   }
 
@@ -32,23 +52,32 @@ export class TicketsController {
     if (req.user.role !== 'ADMIN' && req.user.roleId?.name !== 'ADMIN') {
       throw new Error(`Unauthorized: Only Admins can view agent stats.`);
     }
-    const stats = await this.ticketsService.getAgentStats();
+    const { startDate, endDate } = req.query;
+    const stats = await this.ticketsService.getAgentStats(startDate, endDate);
     return { data: stats };
   }
 
   @Get('agent-stats/:agentId')
-  async getAgentDetailedStats(@Req() req: any, @Param('agentId') agentId: string) {
+  async getAgentDetailedStats(
+    @Req() req: any,
+    @Param('agentId') agentId: string,
+  ) {
     if (req.user.role !== 'ADMIN' && req.user.roleId?.name !== 'ADMIN') {
-      throw new Error(`Unauthorized: Only Admins can view agent detailed stats.`);
+      throw new Error(
+        `Unauthorized: Only Admins can view agent detailed stats.`,
+      );
     }
-    const stats = await this.ticketsService.getAgentDetailedStats(agentId);
+    const { startDate, endDate } = req.query;
+    const stats = await this.ticketsService.getAgentDetailedStats(agentId, startDate, endDate);
     return { data: stats };
   }
 
   @Get('track/:ticketNumber')
   async trackTicket(@Param('ticketNumber') ticketNumber: string) {
     const ticket = await this.ticketsService.getTicketByNumber(ticketNumber);
-    const timeline = await this.ticketsService.getTimeline((ticket as any)._id.toString());
+    const timeline = await this.ticketsService.getTimeline(
+      (ticket as any)._id.toString(),
+    );
     return { data: { ticket, timeline } };
   }
 
@@ -68,10 +97,16 @@ export class TicketsController {
   async updateTicketStatus(
     @Param('id') id: string,
     @Body() updateDto: UpdateTicketStatusDto,
-    @Req() req: any
+    @Req() req: any,
   ) {
     const actorId = req.user._id?.toString() || req.user.sub?.toString();
-    const ticket = await this.ticketsService.updateStatus(id, updateDto, actorId, this.googleAuthService, req.user);
+    const ticket = await this.ticketsService.updateStatus(
+      id,
+      updateDto,
+      actorId,
+      this.googleAuthService,
+      req.user,
+    );
     return { data: ticket };
   }
 
@@ -79,19 +114,29 @@ export class TicketsController {
   async updateTicketDepartment(
     @Param('id') id: string,
     @Body('departmentId') departmentId: string,
-    @Req() req: any
+    @Req() req: any,
   ) {
     try {
-      const isAdmin = req.user.role === 'ADMIN' || req.user.roleId?.name === 'ADMIN';
+      const isAdmin =
+        req.user.role === 'ADMIN' || req.user.roleId?.name === 'ADMIN';
       if (!isAdmin) {
-        throw new Error(`Unauthorized: Only Admins can reassign departments. role: ${req.user.role}, roleId: ${JSON.stringify(req.user.roleId)}`);
+        throw new Error(
+          `Unauthorized: Only Admins can reassign departments. role: ${req.user.role}, roleId: ${JSON.stringify(req.user.roleId)}`,
+        );
       }
       const actorId = req.user._id?.toString() || req.user.sub?.toString();
-      const ticket = await this.ticketsService.updateDepartment(id, departmentId, actorId);
+      const ticket = await this.ticketsService.updateDepartment(
+        id,
+        departmentId,
+        actorId,
+      );
       return { data: ticket };
     } catch (e: any) {
       console.error('Failed to update department:', e);
-      throw new HttpException(e.message || 'Internal server error', e.status || 500);
+      throw new HttpException(
+        e.message || 'Internal server error',
+        e.status || 500,
+      );
     }
   }
 
@@ -99,19 +144,27 @@ export class TicketsController {
   async updateTicketTatType(
     @Param('id') id: string,
     @Body('tatType') tatType: 'INTERNAL' | 'EXTERNAL',
-    @Req() req: any
+    @Req() req: any,
   ) {
     try {
-      const isAdmin = req.user.role === 'ADMIN' || req.user.roleId?.name === 'ADMIN';
+      const isAdmin =
+        req.user.role === 'ADMIN' || req.user.roleId?.name === 'ADMIN';
       if (!isAdmin) {
         throw new Error(`Unauthorized: Only Admins can reassign TAT type.`);
       }
       const actorId = req.user._id?.toString() || req.user.sub?.toString();
-      const ticket = await this.ticketsService.updateTatType(id, tatType, actorId);
+      const ticket = await this.ticketsService.updateTatType(
+        id,
+        tatType,
+        actorId,
+      );
       return { data: ticket };
     } catch (e: any) {
       console.error('Failed to update TAT type:', e);
-      throw new HttpException(e.message || 'Internal server error', e.status || 500);
+      throw new HttpException(
+        e.message || 'Internal server error',
+        e.status || 500,
+      );
     }
   }
 
@@ -119,10 +172,15 @@ export class TicketsController {
   async sendReply(
     @Param('id') id: string,
     @Body('bodyText') bodyText: string,
-    @Req() req: any
+    @Req() req: any,
   ) {
     const actorId = req.user._id?.toString() || req.user.sub?.toString();
-    const result = await this.ticketsService.sendReply(id, bodyText, actorId, this.googleAuthService);
+    const result = await this.ticketsService.sendReply(
+      id,
+      bodyText,
+      actorId,
+      this.googleAuthService,
+    );
     return { data: result };
   }
 }

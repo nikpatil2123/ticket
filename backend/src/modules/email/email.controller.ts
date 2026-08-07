@@ -12,7 +12,7 @@ export class EmailController {
     await this.emailService.handleWebhook(payload);
     return { status: 'received' };
   }
-  
+
   @Post('sync')
   @HttpCode(HttpStatus.OK)
   async syncEmails() {

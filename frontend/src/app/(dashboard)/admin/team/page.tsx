@@ -94,7 +94,7 @@ export default function TeamManagementPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Team & Agent Management</h1>
-          <p className="text-muted-foreground mt-1">Assign agents to specific departments (MIS, LMS) and control access.</p>
+          <p className="text-muted-foreground mt-1">Assign agents to specific departments (SALARY, LEAVE) and control access.</p>
         </div>
         <button 
           onClick={() => handleOpenModal()}

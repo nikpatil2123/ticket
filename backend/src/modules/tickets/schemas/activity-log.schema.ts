@@ -5,7 +5,12 @@ import { User } from '../../users/schemas/user.schema';
 
 @Schema({ timestamps: true })
 export class ActivityLog extends Document {
-  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Ticket', required: true, index: true })
+  @Prop({
+    type: MongooseSchema.Types.ObjectId,
+    ref: 'Ticket',
+    required: true,
+    index: true,
+  })
   ticketId: Ticket;
 
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User' })

@@ -1,4 +1,14 @@
-import { Controller, Get, Param, Put, Body, UseGuards, Req, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Put,
+  Body,
+  UseGuards,
+  Req,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { SettingsService } from './settings.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -9,7 +19,8 @@ export class SettingsController {
 
   @Get(':key')
   async getSetting(@Param('key') key: string, @Req() req: any) {
-    const isAdmin = req.user.role === 'ADMIN' || req.user.roleId?.name === 'ADMIN';
+    const isAdmin =
+      req.user.role === 'ADMIN' || req.user.roleId?.name === 'ADMIN';
     if (!isAdmin) {
       throw new HttpException('Unauthorized', HttpStatus.FORBIDDEN);
     }
@@ -21,9 +32,10 @@ export class SettingsController {
   async updateSetting(
     @Param('key') key: string,
     @Body() value: any,
-    @Req() req: any
+    @Req() req: any,
   ) {
-    const isAdmin = req.user.role === 'ADMIN' || req.user.roleId?.name === 'ADMIN';
+    const isAdmin =
+      req.user.role === 'ADMIN' || req.user.roleId?.name === 'ADMIN';
     if (!isAdmin) {
       throw new HttpException('Unauthorized', HttpStatus.FORBIDDEN);
     }

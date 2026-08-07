@@ -7,8 +7,10 @@ import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: Template.name, schema: TemplateSchema }]),
-    AuthModule
+    MongooseModule.forFeature([
+      { name: Template.name, schema: TemplateSchema },
+    ]),
+    AuthModule,
   ],
   controllers: [TemplatesController],
   providers: [TemplatesService],

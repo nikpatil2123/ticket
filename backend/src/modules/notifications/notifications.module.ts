@@ -3,7 +3,10 @@ import { BullModule } from '@nestjs/bullmq';
 import { MongooseModule } from '@nestjs/mongoose';
 import { NotificationsService } from './notifications.service';
 import { NotificationProcessor } from './processors/notification.processor';
-import { NotificationTemplate, NotificationTemplateSchema } from './schemas/notification-template.schema';
+import {
+  NotificationTemplate,
+  NotificationTemplateSchema,
+} from './schemas/notification-template.schema';
 import { UsersModule } from '../users/users.module';
 
 @Module({

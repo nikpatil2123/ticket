@@ -21,7 +21,11 @@ export class User extends Document {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Role', required: true })
   roleId: Role;
 
-  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Department', required: true })
+  @Prop({
+    type: MongooseSchema.Types.ObjectId,
+    ref: 'Department',
+    required: true,
+  })
   departmentId: Department;
 
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Team' })

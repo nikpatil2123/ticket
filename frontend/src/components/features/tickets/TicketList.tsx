@@ -75,7 +75,7 @@ export default function TicketList({ tatType }: { tatType?: 'INTERNAL' | 'EXTERN
                   {new Date(ticket.createdAt).toLocaleDateString()}
                 </span>
               </div>
-              <h3 className="text-xs font-semibold text-slate-800 truncate mb-2">{ticket.subject}</h3>
+              <h3 className="text-xs font-semibold text-slate-800 truncate mb-2">{ticket.subject || '(No Subject)'}</h3>
               <div className="flex justify-between items-center text-[11px]">
                 <span className="text-slate-500 truncate max-w-[130px] font-normal">{ticket.customerEmail}</span>
                 <div className="flex gap-1.5">
@@ -85,6 +85,9 @@ export default function TicketList({ tatType }: { tatType?: 'INTERNAL' | 'EXTERN
                       : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                   }`}>
                     {ticket.status}
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-semibold text-[10px]">
+                    {ticket.departmentId?.name || ticket.aiClassification?.intent || 'UNASSIGNED'}
                   </span>
                   <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 font-semibold text-[10px]">
                     P{ticket.priority}
