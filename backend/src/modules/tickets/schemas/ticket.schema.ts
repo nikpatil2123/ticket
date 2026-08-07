@@ -12,6 +12,7 @@ export enum TicketStatus {
   IN_PROGRESS = 'IN_PROGRESS',
   RESOLVED = 'RESOLVED',
   CLOSED = 'CLOSED',
+  OTHER = 'OTHER',
 }
 
 export enum TicketPriority {
@@ -23,7 +24,7 @@ export enum TicketPriority {
 
 @Schema({ timestamps: true })
 export class Ticket extends Document {
-  @Prop({ required: true, unique: true })
+  @Prop({ unique: true, sparse: true })
   ticketNumber: string;
 
   @Prop({ required: true, index: true })
@@ -32,7 +33,12 @@ export class Ticket extends Document {
   @Prop({ required: true })
   subject: string;
 
-  @Prop({ type: String, enum: TicketStatus, default: TicketStatus.NEW, index: true })
+  @Prop({
+    type: String,
+    enum: TicketStatus,
+    default: TicketStatus.NEW,
+    index: true,
+  })
   status: TicketStatus;
 
   @Prop({ type: String, enum: TicketPriority, default: TicketPriority.P3 })
@@ -80,3 +86,15 @@ export const TicketSchema = SchemaFactory.createForClass(Ticket);
 
 // Compound index for dashboard filtering
 TicketSchema.index({ status: 1, departmentId: 1 });
+
+// Ensure unique ticketNumber only when ticketNumber field exists (avoid multiple null/undefined conflicts)
+TicketSchema.index(
+  { ticketNumber: 1 },
+  { unique: true, partialFilterExpression: { ticketNumber: { $exists: true, $ne: null } } },
+);
+
+// Ensure unique threadId only when threadId exists
+TicketSchema.index(
+  { threadId: 1 },
+  { unique: true, partialFilterExpression: { threadId: { $exists: true, $ne: null } } },
+);

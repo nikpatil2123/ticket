@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { TicketsRepository } from './tickets.repository';
 import { Ticket, TicketStatus } from './schemas/ticket.schema';
 import { UpdateTicketStatusDto } from './dto/update-ticket-status.dto';
@@ -9,13 +14,16 @@ export class TicketsService {
 
   constructor(private readonly ticketsRepository: TicketsRepository) {}
 
-  async getAllTickets(departmentId?: string, tatType?: string): Promise<Ticket[]> {
+  async getAllTickets(
+    departmentId?: string,
+    tatType?: string,
+  ): Promise<Ticket[]> {
     return this.ticketsRepository.findAll(departmentId, tatType);
   }
 
   async getTicketStats(departmentId?: string): Promise<any> {
     const rawStats = await this.ticketsRepository.getTicketStats(departmentId);
-    
+
     // Format the stats into a friendly object
     const stats: Record<string, number> = {
       TOTAL: 0,
@@ -26,14 +34,14 @@ export class TicketsService {
       RESOLVED: 0,
       CLOSED: 0,
     };
-    
-    rawStats.forEach(stat => {
+
+    rawStats.forEach((stat) => {
       if (stats[stat._id as string] !== undefined) {
         stats[stat._id as string] = stat.count;
       }
       stats.TOTAL += stat.count;
     });
-    
+
     return stats;
   }
 
@@ -58,9 +66,12 @@ export class TicketsService {
   }
 
   async getTicketByNumber(ticketNumber: string): Promise<Ticket> {
-    const ticket = await this.ticketsRepository.findByTicketNumber(ticketNumber);
+    const ticket =
+      await this.ticketsRepository.findByTicketNumber(ticketNumber);
     if (!ticket) {
-      throw new NotFoundException(`Ticket with number ${ticketNumber} not found`);
+      throw new NotFoundException(
+        `Ticket with number ${ticketNumber} not found`,
+      );
     }
     return ticket;
   }
@@ -73,32 +84,76 @@ export class TicketsService {
     return this.ticketsRepository.findMessageByMessageId(messageId);
   }
 
-  async addMessage(ticketId: string, direction: string, from: string, to: string[], subject: string, bodyText: string, messageId?: string) {
-    return this.ticketsRepository.addMessage(ticketId, direction, from, to, subject, bodyText, messageId);
+  async addMessage(
+    ticketId: string,
+    direction: string,
+    from: string,
+    to: string[],
+    subject: string,
+    bodyText: string,
+    messageId?: string,
+  ) {
+    return this.ticketsRepository.addMessage(
+      ticketId,
+      direction,
+      from,
+      to,
+      subject,
+      bodyText,
+      messageId,
+    );
   }
 
-  async logActivity(ticketId: string, actorId: string | null, action: string, changes?: any, note?: string) {
-    return this.ticketsRepository.logActivity(ticketId, actorId, action, changes, note);
+  async logActivity(
+    ticketId: string,
+    actorId: string | null,
+    action: string,
+    changes?: any,
+    note?: string,
+  ) {
+    return this.ticketsRepository.logActivity(
+      ticketId,
+      actorId,
+      action,
+      changes,
+      note,
+    );
   }
 
-  async updateStatus(id: string, updateDto: UpdateTicketStatusDto, actorId: string, googleAuthService?: any, user?: any): Promise<Ticket> {
+  async updateStatus(
+    id: string,
+    updateDto: UpdateTicketStatusDto,
+    actorId: string,
+    googleAuthService?: any,
+    user?: any,
+  ): Promise<Ticket> {
     const ticket = await this.getTicket(id);
 
     if (ticket.status === TicketStatus.CLOSED) {
       throw new BadRequestException('Cannot update status of a CLOSED ticket');
     }
 
-    const resolvedAt = updateDto.status === TicketStatus.RESOLVED ? new Date() : null;
-    
+    const resolvedAt =
+      updateDto.status === TicketStatus.RESOLVED ? new Date() : null;
+
     // Auto-assign to the actor if it's being closed/resolved and isn't currently assigned
     let finalAssignedTo = undefined;
-    if ((updateDto.status === TicketStatus.CLOSED || updateDto.status === TicketStatus.RESOLVED) && !ticket.assignedTo && actorId) {
+    if (
+      (updateDto.status === TicketStatus.CLOSED ||
+        updateDto.status === TicketStatus.RESOLVED) &&
+      !ticket.assignedTo &&
+      actorId
+    ) {
       finalAssignedTo = actorId;
     }
 
     // SLA Pausing Logic
     const extraFields: any = {};
-    const pausedStatuses = [TicketStatus.PENDING_APPROVAL, TicketStatus.PENDING_DOCUMENT_CLARIFICATION, TicketStatus.PENDING_CUSTOMER];
+    const pausedStatuses = [
+      TicketStatus.PENDING_APPROVAL,
+      TicketStatus.PENDING_DOCUMENT_CLARIFICATION,
+      TicketStatus.PENDING_CUSTOMER,
+    ];
     const isNowPaused = pausedStatuses.includes(updateDto.status);
     const wasPaused = pausedStatuses.includes(ticket.status);
 
@@ -106,29 +161,44 @@ export class TicketsService {
       extraFields.pausedAt = new Date();
       extraFields.tatType = 'EXTERNAL';
     } else if (!isNowPaused && wasPaused && ticket.pausedAt) {
-      const elapsedMs = new Date().getTime() - new Date(ticket.pausedAt).getTime();
-      extraFields.totalPausedTimeMs = (ticket.totalPausedTimeMs || 0) + elapsedMs;
+      const elapsedMs =
+        new Date().getTime() - new Date(ticket.pausedAt).getTime();
+      extraFields.totalPausedTimeMs =
+        (ticket.totalPausedTimeMs || 0) + elapsedMs;
       extraFields.pausedAt = null;
     }
 
-    const updatedTicket = await this.ticketsRepository.updateTicketStatus(id, updateDto.status, resolvedAt || undefined, finalAssignedTo, extraFields);
-    
+    const updatedTicket = await this.ticketsRepository.updateTicketStatus(
+      id,
+      updateDto.status,
+      resolvedAt || undefined,
+      finalAssignedTo,
+      extraFields,
+    );
+
     if (updateDto.status === TicketStatus.CLOSED && user) {
-      const agentName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Agent';
+      const agentName =
+        `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Agent';
       await this.ticketsRepository.addMessage(
         id,
         'INTERNAL',
         'SYSTEM',
         [],
         'Ticket Closed',
-        `Closed by the agent ${agentName}`
+        `Closed by the agent ${agentName}`,
       );
     }
-    
-    await this.ticketsRepository.logActivity(id, actorId, 'STATUS_CHANGED', {
-      oldStatus: ticket.status,
-      newStatus: updateDto.status
-    }, updateDto.resolutionNote);
+
+    await this.ticketsRepository.logActivity(
+      id,
+      actorId,
+      'STATUS_CHANGED',
+      {
+        oldStatus: ticket.status,
+        newStatus: updateDto.status,
+      },
+      updateDto.resolutionNote,
+    );
 
     // If closing, send the specific closure email to the user as a reply thread
     if (updateDto.status === TicketStatus.CLOSED && googleAuthService) {
@@ -140,14 +210,30 @@ export class TicketsService {
           'support@acme.com',
           [ticket.customerEmail],
           `Re: ${ticket.subject}`,
-          bodyText
+          bodyText,
         );
-        await this.sendEmailDirectly(ticket, 'Re:', bodyText, googleAuthService);
-        await this.ticketsRepository.logActivity(id, actorId, 'SYSTEM_REPLY', {}, 'Automated closure email sent');
+        await this.sendEmailDirectly(
+          ticket,
+          'Re:',
+          bodyText,
+          googleAuthService,
+        );
+        await this.ticketsRepository.logActivity(
+          id,
+          actorId,
+          'SYSTEM_REPLY',
+          {},
+          'Automated closure email sent',
+        );
       } catch (err) {
         this.logger.error('Failed to send automated closure email', err);
       }
-    } else if (updateDto.status !== ticket.status && updateDto.status !== TicketStatus.CLOSED && updateDto.status !== TicketStatus.NEW && googleAuthService) {
+    } else if (
+      updateDto.status !== ticket.status &&
+      updateDto.status !== TicketStatus.CLOSED &&
+      updateDto.status !== TicketStatus.NEW &&
+      googleAuthService
+    ) {
       // Send a generic status update email for all other status changes
       const readableStatus = updateDto.status.replace(/_/g, ' ');
       const bodyText = `Hello,\n\nThe status of your support ticket ${ticket.ticketNumber} has been updated to: ${readableStatus}\n\nBest regards,\nParul University Support`;
@@ -158,10 +244,21 @@ export class TicketsService {
           'support@acme.com',
           [ticket.customerEmail],
           `Re: ${ticket.subject}`,
-          bodyText
+          bodyText,
         );
-        await this.sendEmailDirectly(ticket, 'Re:', bodyText, googleAuthService);
-        await this.ticketsRepository.logActivity(id, actorId, 'SYSTEM_REPLY', {}, `Automated status update email sent (${readableStatus})`);
+        await this.sendEmailDirectly(
+          ticket,
+          'Re:',
+          bodyText,
+          googleAuthService,
+        );
+        await this.ticketsRepository.logActivity(
+          id,
+          actorId,
+          'SYSTEM_REPLY',
+          {},
+          `Automated status update email sent (${readableStatus})`,
+        );
       } catch (err) {
         this.logger.error('Failed to send automated status email', err);
       }
@@ -171,34 +268,64 @@ export class TicketsService {
     return updatedTicket;
   }
 
-  async updateDepartment(id: string, departmentId: string, actorId: string): Promise<Ticket> {
+  async updateDepartment(
+    id: string,
+    departmentId: string,
+    actorId: string,
+  ): Promise<Ticket> {
     const ticket = await this.getTicket(id);
 
     if (ticket.status === TicketStatus.CLOSED) {
-      throw new BadRequestException('Cannot update department of a CLOSED ticket');
+      throw new BadRequestException(
+        'Cannot update department of a CLOSED ticket',
+      );
     }
 
-    const updatedTicket = await this.ticketsRepository.updateTicketDepartment(id, departmentId);
-    
-    await this.ticketsRepository.logActivity(id, actorId, 'DEPARTMENT_CHANGED', {
-      oldDepartment: ticket.departmentId?._id?.toString() || 'UNASSIGNED',
-      newDepartment: departmentId
-    }, 'Admin manually reassigned department');
+    const updatedTicket = await this.ticketsRepository.updateTicketDepartment(
+      id,
+      departmentId,
+    );
 
-    if (!updatedTicket) throw new NotFoundException('Failed to update ticket department');
+    await this.ticketsRepository.logActivity(
+      id,
+      actorId,
+      'DEPARTMENT_CHANGED',
+      {
+        oldDepartment: ticket.departmentId?._id?.toString() || 'UNASSIGNED',
+        newDepartment: departmentId,
+      },
+      'Admin manually reassigned department',
+    );
+
+    if (!updatedTicket)
+      throw new NotFoundException('Failed to update ticket department');
     return updatedTicket;
   }
 
-  async updateTatType(id: string, tatType: 'INTERNAL' | 'EXTERNAL', actorId: string): Promise<Ticket> {
+  async updateTatType(
+    id: string,
+    tatType: 'INTERNAL' | 'EXTERNAL',
+    actorId: string,
+  ): Promise<Ticket> {
     const ticket = await this.getTicket(id);
-    const updatedTicket = await this.ticketsRepository.updateTicketTatType(id, tatType);
-    
-    await this.logActivity(id, actorId, 'TAT_TYPE_CHANGED', {
-      oldTatType: ticket.tatType,
-      newTatType: tatType
-    }, 'Admin manually changed TAT type');
-    
-    if (!updatedTicket) throw new NotFoundException('Failed to update ticket TAT type');
+    const updatedTicket = await this.ticketsRepository.updateTicketTatType(
+      id,
+      tatType,
+    );
+
+    await this.logActivity(
+      id,
+      actorId,
+      'TAT_TYPE_CHANGED',
+      {
+        oldTatType: ticket.tatType,
+        newTatType: tatType,
+      },
+      'Admin manually changed TAT type',
+    );
+
+    if (!updatedTicket)
+      throw new NotFoundException('Failed to update ticket TAT type');
     return updatedTicket;
   }
 
@@ -207,7 +334,12 @@ export class TicketsService {
   }
 
   // Helper function to send email reliably, maintaining threads
-  private async sendEmailDirectly(ticket: any, subjectPrefix: string, bodyText: string, googleAuthService: any) {
+  private async sendEmailDirectly(
+    ticket: any,
+    subjectPrefix: string,
+    bodyText: string,
+    googleAuthService: any,
+  ) {
     const auth = await googleAuthService.getAuthClient();
     const { google } = require('googleapis');
     const gmail = google.gmail({ version: 'v1', auth });
@@ -223,53 +355,73 @@ export class TicketsService {
 
     // Ensure we have a valid RFC Message-ID for thread replies
     let targetMessageId = ticket.messageId;
-    if ((!targetMessageId || !targetMessageId.includes('@')) && ticket.threadId) {
+    if (
+      (!targetMessageId || !targetMessageId.includes('@')) &&
+      ticket.threadId
+    ) {
       try {
-        this.logger.log(`Ticket ${ticket.ticketNumber} missing RFC Message-ID. Searching Gmail thread ${ticket.threadId}...`);
+        this.logger.log(
+          `Ticket ${ticket.ticketNumber} missing RFC Message-ID. Searching Gmail thread ${ticket.threadId}...`,
+        );
         const threadRes = await gmail.users.threads.get({
           userId: 'me',
           id: ticket.threadId,
-          format: 'full'
+          format: 'full',
         });
         const messagesInThread = threadRes.data.messages || [];
         for (const msgItem of messagesInThread) {
           if (msgItem.payload?.headers) {
-            const foundRfcId = msgItem.payload.headers.find((h: any) => h.name?.toLowerCase() === 'message-id')?.value;
+            const foundRfcId = msgItem.payload.headers.find(
+              (h: any) => h.name?.toLowerCase() === 'message-id',
+            )?.value;
             if (foundRfcId && foundRfcId.includes('@')) {
               targetMessageId = foundRfcId;
-              this.logger.log(`Found RFC Message-ID in Gmail thread: ${foundRfcId}`);
-              await this.ticketsRepository.updateTicketMessageId(ticket._id.toString(), foundRfcId);
+              this.logger.log(
+                `Found RFC Message-ID in Gmail thread: ${foundRfcId}`,
+              );
+              await this.ticketsRepository.updateTicketMessageId(
+                ticket._id.toString(),
+                foundRfcId,
+              );
               break;
             }
           }
         }
       } catch (e) {
-        this.logger.error('Failed to fetch original thread Message-ID from Gmail', e);
+        this.logger.error(
+          'Failed to fetch original thread Message-ID from Gmail',
+          e,
+        );
       }
     }
 
     const emailLines = [
       `From: ${fromEmail}`,
       `To: ${ticket.customerEmail}`,
-      `Subject: ${subject}`
+      `Subject: ${subject}`,
     ];
 
     if (targetMessageId) {
-      const formattedMessageId = targetMessageId.startsWith('<') && targetMessageId.endsWith('>') 
-        ? targetMessageId 
-        : `<${targetMessageId}>`;
+      const formattedMessageId =
+        targetMessageId.startsWith('<') && targetMessageId.endsWith('>')
+          ? targetMessageId
+          : `<${targetMessageId}>`;
       emailLines.push(`In-Reply-To: ${formattedMessageId}`);
       emailLines.push(`References: ${formattedMessageId}`);
-      this.logger.log(`Sending email reply with In-Reply-To: ${formattedMessageId}`);
+      this.logger.log(
+        `Sending email reply with In-Reply-To: ${formattedMessageId}`,
+      );
     } else {
-      this.logger.warn(`No RFC Message-ID found for ticket ${ticket.ticketNumber}`);
+      this.logger.warn(
+        `No RFC Message-ID found for ticket ${ticket.ticketNumber}`,
+      );
     }
 
     emailLines.push('Content-Type: text/plain; charset=utf-8');
     emailLines.push('MIME-Version: 1.0');
     emailLines.push('');
     emailLines.push(bodyText);
-    
+
     const emailStr = emailLines.join('\r\n');
     const encodedEmail = Buffer.from(emailStr, 'utf-8')
       .toString('base64')
@@ -284,39 +436,55 @@ export class TicketsService {
 
     await gmail.users.messages.send({
       userId: 'me',
-      requestBody
+      requestBody,
     });
   }
 
   async getTimeline(id: string) {
     const ticket = await this.getTicket(id); // ensure exists
-    const { messages, logs } = await this.ticketsRepository.getTimeline((ticket as any).id || (ticket as any)._id);
-    
+    const { messages, logs } = await this.ticketsRepository.getTimeline(
+      (ticket as any).id || (ticket as any)._id,
+    );
+
     // Merge and sort chronologically
     const timeline = [
-      ...messages.map(m => ({ type: 'MESSAGE', data: m, timestamp: m.receivedAt })),
-      ...logs.map(l => ({ type: 'ACTIVITY', data: l, timestamp: (l as any).createdAt }))
+      ...messages.map((m) => ({
+        type: 'MESSAGE',
+        data: m,
+        timestamp: m.receivedAt,
+      })),
+      ...logs.map((l) => ({
+        type: 'ACTIVITY',
+        data: l,
+        timestamp: (l as any).createdAt,
+      })),
     ].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
     return timeline;
   }
 
-  async createTicket(payload: any) {
+  // Creates a ticket for supported departments or persists an inbox entry for other/unassigned emails
+  async createTicket(payload: any): Promise<any> {
     return this.ticketsRepository.createTicket(
-      { 
-        subject: payload.subject, 
-        customerEmail: payload.customerEmail, 
+      {
+        subject: payload.subject,
+        customerEmail: payload.customerEmail,
         aiClassification: payload.aiClassification,
         threadId: payload.threadId,
-        messageId: payload.messageId
-      }, 
-      payload.initialMessage
+        messageId: payload.messageId,
+      },
+      payload.initialMessage,
     );
   }
 
-  async sendReply(id: string, bodyText: string, actorId: string, googleAuthService: any) {
+  async sendReply(
+    id: string,
+    bodyText: string,
+    actorId: string,
+    googleAuthService: any,
+  ) {
     const ticket = await this.getTicket(id);
-    
+
     // Save outbound message to DB
     await this.ticketsRepository.addMessage(
       id,
@@ -324,14 +492,20 @@ export class TicketsService {
       'support@acme.com', // Would normally be dynamically fetched from SystemSettings
       [ticket.customerEmail],
       `Re: ${ticket.subject}`,
-      bodyText
+      bodyText,
     );
-    await this.ticketsRepository.logActivity(id, actorId, 'AGENT_REPLY', {}, 'Agent sent a reply');
+    await this.ticketsRepository.logActivity(
+      id,
+      actorId,
+      'AGENT_REPLY',
+      {},
+      'Agent sent a reply',
+    );
 
     // Actually send the email via Gmail API
     try {
       await this.sendEmailDirectly(ticket, 'Re:', bodyText, googleAuthService);
-    } catch(e) {
+    } catch (e) {
       console.error('Failed to send reply email', e);
     }
 
@@ -341,7 +515,7 @@ export class TicketsService {
   async sendAutoReply(id: string, googleAuthService: any) {
     const ticket = await this.getTicket(id);
     const bodyText = `Hello,\n\nWe have received your support request. Your ticket number is ${ticket.ticketNumber}.\n\nOur team will get back to you shortly.\n\nBest regards,\nParul University Support`;
-    
+
     // Save outbound message to DB
     await this.ticketsRepository.addMessage(
       id,
@@ -349,14 +523,20 @@ export class TicketsService {
       'support@acme.com',
       [ticket.customerEmail],
       `Re: ${ticket.subject}`,
-      bodyText
+      bodyText,
     );
-    await this.ticketsRepository.logActivity(id, null, 'SYSTEM_REPLY', {}, 'Automated ticket confirmation sent');
+    await this.ticketsRepository.logActivity(
+      id,
+      null,
+      'SYSTEM_REPLY',
+      {},
+      'Automated ticket confirmation sent',
+    );
 
     // Actually send the email via Gmail API
     try {
       await this.sendEmailDirectly(ticket, 'Re:', bodyText, googleAuthService);
-    } catch(e) {
+    } catch (e) {
       console.error('Failed to send auto reply email', e);
     }
 
