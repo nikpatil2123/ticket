@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { EmailService } from './email.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -17,7 +17,12 @@ export class EmailController {
   @Post('sync')
   @HttpCode(HttpStatus.OK)
   async syncEmails() {
-    await this.emailService.syncEmails();
+    await this.emailService.syncAllAccounts();
     return { status: 'sync_completed' };
+  }
+
+  @Get('connections')
+  async getConnections() {
+    return this.emailService.getConnections();
   }
 }

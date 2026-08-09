@@ -218,9 +218,33 @@ export class TicketsRepository {
   async findTicketByThreadId(threadId: string): Promise<Ticket | null> {
     if (!threadId) return null;
     return this.ticketModel
-      .findOne({ threadId })
+      .findOne({ $or: [{ threadId: threadId }, { gmailThreadId: threadId }] })
       .populate('departmentId assignedTo')
       .exec();
+  }
+
+  async findTicketByGmailThreadId(connectionId: string, threadId: string): Promise<Ticket | null> {
+    if (!threadId || !connectionId) return null;
+    return this.ticketModel
+      .findOne({ gmailConnectionId: connectionId, gmailThreadId: threadId })
+      .populate('departmentId assignedTo')
+      .exec();
+  }
+
+  async findMessageByGmailId(connectionId: string, gmailMessageId: string): Promise<Message | null> {
+    if (!connectionId || !gmailMessageId) return null;
+    return this.messageModel
+      .findOne({ gmailConnectionId: connectionId, gmailMessageId })
+      .exec();
+  }
+
+  async findTicketByMessageIdHeader(messageId: string): Promise<Ticket | null> {
+    if (!messageId) return null;
+    const msg = await this.messageModel.findOne({ messageId }).exec();
+    if (msg) {
+      return this.findTicketById(msg.ticketId.toString());
+    }
+    return null;
   }
 
   async findByTicketNumber(ticketNumber: string): Promise<Ticket | null> {
@@ -484,28 +508,33 @@ export class TicketsRepository {
   async createTicket(
     ticketData: Partial<Ticket>,
     initialMessage: string,
+    metadata?: any,
   ): Promise<{ ticket: Ticket; message: Message } | { inboxEntryId: string }> {
     // Fetch the correct department based on AI classification
     const mongoose = require('mongoose');
-    let deptId = null;
-    try {
-      const intentName = ticketData.aiClassification?.intent || 'UNASSIGNED';
-      if (intentName !== 'UNASSIGNED') {
-        const db = this.ticketModel.db;
-        const dept = await db
-          .collection('departments')
-          .findOne({ name: { $regex: new RegExp(`^${intentName}$`, 'i') } });
-        if (dept) deptId = dept._id;
+    let deptId = ticketData.departmentId || null;
+    
+    // Auto-assign department if not explicitly set
+    if (!deptId) {
+      try {
+        const intentName = ticketData.aiClassification?.intent || 'UNASSIGNED';
+        if (intentName !== 'UNASSIGNED') {
+          const db = this.ticketModel.db;
+          const dept = await db
+            .collection('departments')
+            .findOne({ name: { $regex: new RegExp(`^${intentName}$`, 'i') } });
+          if (dept) deptId = dept._id as any;
+        }
+      } catch (e) {
+        console.error('Failed to assign department', e);
       }
-    } catch (e) {
-      console.error('Failed to assign department', e);
     }
 
     const intentName = ticketData.aiClassification?.intent || 'UNASSIGNED';
     const supportedIntents = ['SALARY', 'MIS_DETAILS_CHANGE', 'LEAVE', 'ATTENDANCE'];
-    const isOther = !supportedIntents.includes(intentName);
+    const isOther = !deptId && !supportedIntents.includes(intentName);
 
-    // If the email does not belong to supported departments, do NOT create a ticket.
+    // If the email does not belong to supported departments and has no deptId, do NOT create a ticket.
     // Instead, persist to a separate inbox_entries collection for manual review.
     if (isOther) {
       try {
@@ -514,14 +543,12 @@ export class TicketsRepository {
           subject: ticketData.subject,
           customerEmail: ticketData.customerEmail,
           aiClassification: ticketData.aiClassification || null,
-          threadId: ticketData.threadId || null,
-          messageId: ticketData.messageId || null,
           bodyText: initialMessage,
           createdAt: new Date(),
           processed: false,
+          ...metadata,
         };
         const res = await db.collection('inbox_entries').insertOne(inboxDoc);
-        // Do not create ActivityLog here because ActivityLog requires a ticketId. Inbox entries are for manual review.
         return { inboxEntryId: res.insertedId.toString() };
       } catch (err) {
         console.error('Failed to persist inbox entry for OTHER/UNASSIGNED email', err);
@@ -534,6 +561,8 @@ export class TicketsRepository {
       departmentId: deptId,
       status: TicketStatus.OPEN,
       priority: 'P3' as TicketPriority,
+      gmailConnectionId: metadata?.gmailConnectionId,
+      gmailThreadId: metadata?.gmailThreadId,
     };
 
     ticketPayload.ticketNumber = `TKT-${Date.now()}`;
@@ -543,14 +572,13 @@ export class TicketsRepository {
 
     const message = new this.messageModel({
       ticketId: savedTicket._id,
-      threadId: ticketData.threadId || savedTicket._id.toString(),
-      messageId: ticketData.messageId || `msg_${Date.now()}`,
       direction: 'INBOUND',
       from: ticketData.customerEmail,
-      to: ['support@acme.com'], // The support inbox
+      to: ['support@acme.com'], // In practice this should be the connection email address
       subject: ticketData.subject,
       bodyText: initialMessage,
       receivedAt: new Date(),
+      ...metadata, // adds gmailConnectionId, gmailMessageId, gmailThreadId, messageId, inReplyTo, references
     });
     await message.save();
 
@@ -577,17 +605,18 @@ export class TicketsRepository {
     subject: string,
     bodyText: string,
     messageId?: string,
+    metadata?: any,
   ): Promise<Message> {
     const message = new this.messageModel({
       ticketId,
-      threadId: ticketId,
-      messageId: messageId || `msg_${Date.now()}`,
       direction,
       from,
       to,
       subject,
       bodyText,
       receivedAt: new Date(),
+      messageId: messageId || `msg_${Date.now()}`,
+      ...metadata,
     });
 
     // Touch the ticket's updatedAt timestamp so it jumps to top of queue

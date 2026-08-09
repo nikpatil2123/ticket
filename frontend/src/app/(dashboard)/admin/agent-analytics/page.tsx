@@ -12,6 +12,7 @@ export default function AgentAnalyticsPage() {
   const [endDate, setEndDate] = useState('');
   const [internalHrs, setInternalHrs] = useState(24);
   const [externalHrs, setExternalHrs] = useState(48);
+  const [businessHours, setBusinessHours] = useState({ start: '09:00', end: '17:00', weekends: false });
 
   useEffect(() => {
     fetchStats();
@@ -24,15 +25,23 @@ export default function AgentAnalyticsPage() {
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
 
-      const [statsRes, internalRes, externalRes] = await Promise.all([
+      const [statsRes, internalRes, externalRes, businessRes] = await Promise.all([
         apiClient.get(`/tickets/agent-stats?${params.toString()}`),
         apiClient.get('/settings/tat_internal').catch(() => null),
-        apiClient.get('/settings/tat_external').catch(() => null)
+        apiClient.get('/settings/tat_external').catch(() => null),
+        apiClient.get('/settings/tat_business_hours').catch(() => null)
       ]);
 
       setStats(statsRes.data.data);
-      if (internalRes?.data?.data?.resolutionTimeHours) setInternalHrs(internalRes.data.data.resolutionTimeHours);
-      if (externalRes?.data?.data?.resolutionTimeHours) setExternalHrs(externalRes.data.data.resolutionTimeHours);
+      if (internalRes?.data?.data?.resolutionHours) setInternalHrs(internalRes.data.data.resolutionHours);
+      if (externalRes?.data?.data?.resolutionHours) setExternalHrs(externalRes.data.data.resolutionHours);
+      if (businessRes?.data?.data) {
+        setBusinessHours({
+          start: businessRes.data.data.businessHoursStart || '09:00',
+          end: businessRes.data.data.businessHoursEnd || '17:00',
+          weekends: !!businessRes.data.data.includeWeekends
+        });
+      }
     } catch (err: any) {
       console.error('Failed to load agent stats', err);
       setError(err.response?.data?.message || err.message || 'Failed to load stats');
@@ -69,22 +78,33 @@ export default function AgentAnalyticsPage() {
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Agent Analytics</h1>
           <p className="text-sm text-slate-500 mt-1">Track individual agent performance and SLA compliance.</p>
         </div>
-        <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
-          <input 
-            type="date" 
-            className="text-sm border-0 focus:ring-0 p-1 text-slate-700" 
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            title="Start Date"
-          />
-          <span className="text-slate-400 text-sm">to</span>
-          <input 
-            type="date" 
-            className="text-sm border-0 focus:ring-0 p-1 text-slate-700" 
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            title="End Date"
-          />
+        <div className="flex flex-col items-end gap-3">
+          <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
+            <input 
+              type="date" 
+              className="text-sm border-0 focus:ring-0 p-1 text-slate-700" 
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              title="Start Date"
+            />
+            <span className="text-slate-400 text-sm">to</span>
+            <input 
+              type="date" 
+              className="text-sm border-0 focus:ring-0 p-1 text-slate-700" 
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              title="End Date"
+            />
+          </div>
+          
+          <div className="flex items-center gap-3 text-xs bg-blue-50 text-blue-800 px-3 py-2 rounded-lg border border-blue-200 shadow-sm">
+            <div className="font-semibold flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> SLA Limits:</div>
+            <div className="px-2 border-l border-blue-300">Internal: {internalHrs}h</div>
+            <div className="px-2 border-l border-blue-300">External: {externalHrs}h</div>
+            <div className="px-2 border-l border-blue-300">
+              Clock: {businessHours.start} - {businessHours.end} ({businessHours.weekends ? 'Mon-Sun' : 'Mon-Fri'})
+            </div>
+          </div>
         </div>
       </div>
 

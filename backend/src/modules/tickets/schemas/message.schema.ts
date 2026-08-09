@@ -19,8 +19,23 @@ export class Message extends Document {
   })
   ticketId: Ticket;
 
-  @Prop({ required: true, unique: true })
-  messageId: string; // Gmail Message ID
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'GmailConnection' })
+  gmailConnectionId?: string;
+
+  @Prop()
+  gmailMessageId?: string; // The ID assigned by Google APIs
+
+  @Prop()
+  gmailThreadId?: string; // The thread ID assigned by Google APIs
+
+  @Prop()
+  messageId?: string; // The RFC 2822 Message-ID header
+
+  @Prop()
+  inReplyTo?: string; // The RFC 2822 In-Reply-To header
+
+  @Prop({ type: [String], default: [] })
+  references: string[]; // The RFC 2822 References header
 
   @Prop({ type: String, enum: MessageDirection, required: true })
   direction: MessageDirection;
@@ -51,3 +66,9 @@ export const MessageSchema = SchemaFactory.createForClass(Message);
 
 // Index to quickly fetch chronologically
 MessageSchema.index({ ticketId: 1, receivedAt: 1 });
+
+// Unique compound index for idempotency across Gmail imports
+MessageSchema.index(
+  { gmailConnectionId: 1, gmailMessageId: 1 },
+  { unique: true, partialFilterExpression: { gmailMessageId: { $exists: true } } }
+);

@@ -23,6 +23,7 @@ import { HealthController } from './health.controller';
   imports: [
     LoggerModule.forRoot({
       pinoHttp: {
+        autoLogging: false,
         transport: process.env.NODE_ENV !== 'production'
           ? { target: 'pino-pretty', options: { colorize: true } }
           : undefined,

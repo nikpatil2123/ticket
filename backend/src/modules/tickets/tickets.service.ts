@@ -70,8 +70,8 @@ export class TicketsService {
     const externalTat = await this.settingsService.getSetting('tat_external');
     
     // Default to 24 hrs for internal, 48 hrs for external if not set
-    const internalHours = internalTat?.resolutionTimeHours || 24;
-    const externalHours = externalTat?.resolutionTimeHours || 48;
+    const internalHours = internalTat?.resolutionHours || 24;
+    const externalHours = externalTat?.resolutionHours || 48;
 
     return this.ticketsRepository.getAgentStats(startDate, endDate, internalHours * 3600000, externalHours * 3600000);
   }
@@ -80,8 +80,8 @@ export class TicketsService {
     const internalTat = await this.settingsService.getSetting('tat_internal');
     const externalTat = await this.settingsService.getSetting('tat_external');
     
-    const internalHours = internalTat?.resolutionTimeHours || 24;
-    const externalHours = externalTat?.resolutionTimeHours || 48;
+    const internalHours = internalTat?.resolutionHours || 24;
+    const externalHours = externalTat?.resolutionHours || 48;
 
     const stats = await this.ticketsRepository.getAgentDetailedStats(agentId, startDate, endDate, internalHours * 3600000, externalHours * 3600000);
     if (!stats) {
@@ -113,8 +113,20 @@ export class TicketsService {
     return this.ticketsRepository.findTicketByThreadId(threadId);
   }
 
+  async findTicketByGmailThreadId(connectionId: string, threadId: string): Promise<Ticket | null> {
+    return this.ticketsRepository.findTicketByGmailThreadId(connectionId, threadId);
+  }
+
   async findMessageByMessageId(messageId: string) {
     return this.ticketsRepository.findMessageByMessageId(messageId);
+  }
+
+  async findMessageByGmailId(connectionId: string, gmailMessageId: string) {
+    return this.ticketsRepository.findMessageByGmailId(connectionId, gmailMessageId);
+  }
+
+  async findTicketByMessageIdHeader(messageId: string) {
+    return this.ticketsRepository.findTicketByMessageIdHeader(messageId);
   }
 
   async addMessage(
@@ -125,6 +137,7 @@ export class TicketsService {
     subject: string,
     bodyText: string,
     messageId?: string,
+    metadata?: any, // { gmailConnectionId, gmailMessageId, gmailThreadId, messageId (header), inReplyTo, references }
   ) {
     return this.ticketsRepository.addMessage(
       ticketId,
@@ -134,6 +147,7 @@ export class TicketsService {
       subject,
       bodyText,
       messageId,
+      metadata,
     );
   }
 
@@ -441,14 +455,18 @@ export class TicketsService {
     return this.ticketsRepository.updateTicketMessageId(id, messageId);
   }
 
-  // Helper function to send email reliably, maintaining threads
   private async sendEmailDirectly(
     ticket: any,
     subjectPrefix: string,
     bodyText: string,
     googleAuthService: any,
   ) {
-    const auth = await googleAuthService.getAuthClient();
+    let auth;
+    if (ticket.gmailConnectionId) {
+      auth = await googleAuthService.getAuthClientForConnection(ticket.gmailConnectionId.toString());
+    } else {
+      auth = await googleAuthService.getAuthClient();
+    }
     const { google } = require('googleapis');
     const gmail = google.gmail({ version: 'v1', auth });
 
@@ -462,18 +480,28 @@ export class TicketsService {
     }
 
     // Ensure we have a valid RFC Message-ID for thread replies
-    let targetMessageId = ticket.messageId;
+    const activeThreadId = ticket.gmailThreadId || ticket.threadId;
+    let targetMessageId = ticket.messageId; // legacy support
+
+    if (!targetMessageId) {
+      const { messages: ticketMsgs } = await this.ticketsRepository.getTimeline(ticket._id.toString());
+      const lastInbound = ticketMsgs.slice().reverse().find((m: any) => m.direction === 'INBOUND' && m.messageId);
+      if (lastInbound) {
+        targetMessageId = lastInbound.messageId;
+      }
+    }
+
     if (
       (!targetMessageId || !targetMessageId.includes('@')) &&
-      ticket.threadId
+      activeThreadId
     ) {
       try {
         this.logger.log(
-          `Ticket ${ticket.ticketNumber} missing RFC Message-ID. Searching Gmail thread ${ticket.threadId}...`,
+          `Ticket ${ticket.ticketNumber} missing RFC Message-ID. Searching Gmail thread ${activeThreadId}...`,
         );
         const threadRes = await gmail.users.threads.get({
           userId: 'me',
-          id: ticket.threadId,
+          id: activeThreadId,
           format: 'full',
         });
         const messagesInThread = threadRes.data.messages || [];
@@ -487,10 +515,7 @@ export class TicketsService {
               this.logger.log(
                 `Found RFC Message-ID in Gmail thread: ${foundRfcId}`,
               );
-              await this.ticketsRepository.updateTicketMessageId(
-                ticket._id.toString(),
-                foundRfcId,
-              );
+              // We might not have updateTicketMessageId anymore or it's fine
               break;
             }
           }
@@ -541,8 +566,8 @@ export class TicketsService {
       .replace(/=+$/, '');
 
     const requestBody: any = { raw: encodedEmail };
-    if (ticket.threadId) {
-      requestBody.threadId = ticket.threadId;
+    if (activeThreadId) {
+      requestBody.threadId = activeThreadId;
     }
 
     await gmail.users.messages.send({
@@ -581,10 +606,12 @@ export class TicketsService {
         subject: payload.subject,
         customerEmail: payload.customerEmail,
         aiClassification: payload.aiClassification,
-        threadId: payload.threadId,
-        messageId: payload.messageId,
+        departmentId: payload.departmentId,
+        gmailConnectionId: payload.gmailConnectionId,
+        gmailThreadId: payload.gmailThreadId,
       },
       payload.initialMessage,
+      payload, // passing all metadata to the initial message
     );
   }
 

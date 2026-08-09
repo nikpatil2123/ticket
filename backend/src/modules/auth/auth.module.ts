@@ -19,6 +19,15 @@ import {
   BlacklistedTokenSchema,
 } from './schemas/blacklisted-token.schema';
 
+import {
+  OAuthState,
+  OAuthStateSchema,
+} from './schemas/oauth-state.schema';
+import {
+  GmailConnection,
+  GmailConnectionSchema,
+} from '../email/schemas/gmail-connection.schema';
+
 @Module({
   imports: [
     ConfigModule,
@@ -35,6 +44,8 @@ import {
     MongooseModule.forFeature([
       { name: SystemSettings.name, schema: SystemSettingsSchema },
       { name: BlacklistedToken.name, schema: BlacklistedTokenSchema },
+      { name: OAuthState.name, schema: OAuthStateSchema },
+      { name: GmailConnection.name, schema: GmailConnectionSchema },
     ]),
   ],
   controllers: [GoogleAuthController, AuthController],

@@ -10,6 +10,11 @@ import { TicketsModule } from '../tickets/tickets.module';
 import { AuthModule } from '../auth/auth.module';
 import { AiModule } from '../ai/ai.module';
 
+import {
+  GmailConnection,
+  GmailConnectionSchema,
+} from './schemas/gmail-connection.schema';
+
 @Module({
   imports: [
     BullModule.registerQueue({
@@ -22,6 +27,7 @@ import { AiModule } from '../ai/ai.module';
     MongooseModule.forFeature([
       { name: SyncState.name, schema: SyncStateSchema },
       { name: Attachment.name, schema: AttachmentSchema },
+      { name: GmailConnection.name, schema: GmailConnectionSchema },
     ]),
     TicketsModule, // Needed for processor to interact with tickets
     AuthModule,

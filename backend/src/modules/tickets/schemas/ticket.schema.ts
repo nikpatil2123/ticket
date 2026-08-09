@@ -63,8 +63,11 @@ export class Ticket extends Document {
   @Prop({ type: [String], default: [] })
   tags: string[];
 
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'GmailConnection' })
+  gmailConnectionId?: string;
+
   @Prop()
-  threadId: string;
+  gmailThreadId?: string;
 
   @Prop({ type: Date, default: null })
   pausedAt?: Date;
@@ -74,9 +77,6 @@ export class Ticket extends Document {
 
   @Prop({ type: Number, default: 1, min: 1 })
   requestCount: number;
-
-  @Prop()
-  messageId: string;
 
   @Prop()
   firstResponseAt: Date;
@@ -101,6 +101,6 @@ TicketSchema.index(
 
 // Ensure unique threadId only when threadId exists
 TicketSchema.index(
-  { threadId: 1 },
-  { unique: true, partialFilterExpression: { threadId: { $exists: true, $ne: null } } },
+  { gmailThreadId: 1 },
+  { unique: true, partialFilterExpression: { gmailThreadId: { $exists: true, $ne: null } } },
 );
