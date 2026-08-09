@@ -24,10 +24,8 @@ export class TicketsController {
 
   @Get()
   async getAllTickets(@Req() req: any) {
-    const departmentId =
-      req.user.role === 'ADMIN'
-        ? req.query.departmentId
-        : req.user.departmentId;
+    const isAdmin = req.user.role === 'ADMIN' || req.user.roleId?.name === 'ADMIN'; console.log('isAdmin:', isAdmin, 'roleId:', req.user.roleId);
+    const departmentId = isAdmin ? req.query.departmentId : req.user.departmentId;
     const tatType = req.query.tatType;
     const priority = req.query.priority;
     const tickets = await this.ticketsService.getAllTickets(
@@ -40,10 +38,8 @@ export class TicketsController {
 
   @Get('stats')
   async getTicketStats(@Req() req: any) {
-    const departmentId =
-      req.user.role === 'ADMIN'
-        ? req.query.departmentId
-        : req.user.departmentId;
+    const isAdmin = req.user.role === 'ADMIN' || req.user.roleId?.name === 'ADMIN'; console.log('isAdmin:', isAdmin, 'roleId:', req.user.roleId);
+    const departmentId = isAdmin ? req.query.departmentId : req.user.departmentId;
     const { startDate, endDate } = req.query;
     const stats = await this.ticketsService.getTicketStats(departmentId, startDate, endDate);
     return { data: stats };

@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "strix-ci-setup": {
+      "source": "usestrix/strix",
+      "sourceType": "github",
+      "skillPath": "skills/strix-ci-setup/SKILL.md",
+      "computedHash": "c33a3b74aa5088c43a1a9d401bff0d0e912ad28698f670e418e9217fc91295b1"
+    },
+    "strix-cloud-api": {
+      "source": "usestrix/strix",
+      "sourceType": "github",
+      "skillPath": "skills/strix-cloud-api/SKILL.md",
+      "computedHash": "1d76a812f1a37ece9fe45c20f318c413643cdc232266964c0d21b0779c9d6574"
+    },
+    "strix-fix-findings": {
+      "source": "usestrix/strix",
+      "sourceType": "github",
+      "skillPath": "skills/strix-fix-findings/SKILL.md",
+      "computedHash": "1de04aa92c46df1a932f5146e5b9f0002bda6a50ed4668cccfc89d43bccd9bf4"
+    },
+    "strix-pentest": {
+      "source": "usestrix/strix",
+      "sourceType": "github",
+      "skillPath": "skills/strix-pentest/SKILL.md",
+      "computedHash": "ce335a9bf9ac15a4d1a0d94218802f3f123af24862a02627ca947e88c9a0cd35"
+    }
+  }
+}

@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "api:test": "node ../api-test.js",
+    "api-test": "node ../api-test.js"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.2",
