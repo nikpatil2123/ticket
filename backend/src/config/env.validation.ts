@@ -12,4 +12,6 @@ export const envValidationSchema = Joi.object({
   GROQ_API_KEY_1: Joi.string().required(),
   GROQ_API_KEY_2: Joi.string().optional(),
   GOOGLE_DRIVE_FOLDER_ID: Joi.string().optional(),
+  CLOUDFLARE_ACCOUNT_ID: Joi.string().optional(),
+  CLOUDFLARE_API_TOKEN: Joi.string().optional(),
 });

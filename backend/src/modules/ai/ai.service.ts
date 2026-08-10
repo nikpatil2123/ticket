@@ -36,7 +36,6 @@ export class AiService {
     }
 
     try {
-      this.logger.log(`Classifying email via Groq: ${subject}`);
 
       const prompt = `
       You are an expert IT support dispatcher. Analyze the following support email and return a strictly formatted JSON object. 
@@ -65,12 +64,52 @@ export class AiService {
       Email Body: "${bodyText.substring(0, 2000)}" // Truncated to avoid token limits
       `;
 
+      const cfAccountId = this.configService.get<string>('cloudflare.accountId');
+      const cfApiToken = this.configService.get<string>('cloudflare.apiToken');
+
+      if (cfAccountId && cfApiToken) {
+        try {
+          this.logger.log(`Classifying email via Cloudflare Worker AI: ${subject}`);
+          const cfUrl = `https://api.cloudflare.com/client/v4/accounts/${cfAccountId}/ai/run/@cf/meta/llama-3.1-8b-instruct-fp8`;
+          
+          const response = await fetch(cfUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${cfApiToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              messages: [{ role: 'user', content: prompt }]
+            })
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            const jsonStr = data.result?.response || '{}';
+            
+            // Clean up backticks if any
+            const cleanJsonStr = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
+            const result = JSON.parse(cleanJsonStr) as ClassificationResultDto;
+            
+            this.logger.log(`Cloudflare Classification successful. Intent: ${result.intent}`);
+            return result;
+          } else {
+            this.logger.warn(`Cloudflare Worker AI failed with status: ${response.status}. Falling back to Groq.`);
+          }
+        } catch (cfError) {
+          this.logger.warn('Cloudflare Worker AI error. Falling back to Groq.', cfError);
+        }
+      }
+
+      // Fallback to Groq
       if (this.groqClients.length === 0) {
         throw new Error('Groq clients not initialized');
       }
 
       const client = this.groqClients[this.currentClientIndex];
       this.currentClientIndex = (this.currentClientIndex + 1) % this.groqClients.length;
+
+      this.logger.log(`Classifying email via Groq: ${subject}`);
 
       const chatCompletion = await client.chat.completions.create({
         messages: [{ role: 'user', content: prompt }],

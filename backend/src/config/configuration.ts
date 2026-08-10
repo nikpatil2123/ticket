@@ -20,4 +20,8 @@ export default () => ({
     apiKeys: [process.env.GROQ_API_KEY_1, process.env.GROQ_API_KEY_2].filter(Boolean),
     useGroq: process.env.USE_GROQ_API !== 'false',
   },
+  cloudflare: {
+    accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+    apiToken: process.env.CLOUDFLARE_API_TOKEN,
+  }
 });
