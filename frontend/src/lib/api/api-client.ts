@@ -14,8 +14,10 @@ export const apiClient = axios.create({
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    const originalRequest = error.config;
     if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-      if (typeof window !== 'undefined') {
+      // Do not redirect if the request was to the login endpoint itself
+      if (typeof window !== 'undefined' && originalRequest.url !== '/auth/login') {
         localStorage.removeItem('user');
         window.location.href = '/login';
       }
