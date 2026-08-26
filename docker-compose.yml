@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ticket-backend
+    restart: always
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - MONGODB_URI=${MONGODB_URI:-mongodb://localhost:27017/ticket}
+      - JWT_SECRET=${JWT_SECRET:-supersecretjwt}
+      - FRONTEND_URL=http://localhost:3000
+    networks:
+      - ticket-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ticket-frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=/v1
+    depends_on:
+      - backend
+    networks:
+      - ticket-network
+
+networks:
+  ticket-network:
+    driver: bridge
