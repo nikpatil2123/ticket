@@ -234,20 +234,35 @@ export default function TeamManagementPage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Assigned Department</label>
-                <select 
-                  value={formData.departmentId}
-                  onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-md text-sm bg-background"
-                >
-                  <option value="">Select Department...</option>
-                  {departments.map(dept => (
-                    <option key={dept._id} value={dept._id}>
-                      {dept.name} Department
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Role</label>
+                  <select 
+                    value={formData.role}
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md text-sm bg-background"
+                  >
+                    <option value="AGENT">Agent</option>
+                    <option value="TEAM">Team Member</option>
+                    <option value="ADMIN">Administrator (Full Access)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Assigned Department</label>
+                  <select 
+                    value={formData.departmentId}
+                    onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md text-sm bg-background"
+                    disabled={formData.role === 'ADMIN'}
+                  >
+                    <option value="">{formData.role === 'ADMIN' ? 'All Departments (Admin)' : 'Select Department...'}</option>
+                    {departments.map(dept => (
+                      <option key={dept._id} value={dept._id}>
+                        {dept.name} Department
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div className="flex justify-end gap-3 pt-2">

@@ -78,6 +78,67 @@ export class TicketsRepository {
       .exec();
   }
 
+  async getTopSenders(departmentId?: string, startDate?: string, endDate?: string, limit: number = 10): Promise<any[]> {
+    const matchStage: any = {};
+    if (departmentId) {
+      matchStage.departmentId = new mongoose.Types.ObjectId(departmentId);
+    }
+    if (startDate || endDate) {
+      matchStage.createdAt = {};
+      if (startDate) matchStage.createdAt.$gte = new Date(startDate);
+      if (endDate) matchStage.createdAt.$lte = new Date(endDate);
+    }
+    return this.ticketModel
+      .aggregate([
+        { $match: matchStage },
+        { 
+          $group: { 
+            _id: '$customerEmail', 
+            count: { $sum: 1 },
+          } 
+        },
+        { $sort: { count: -1 } },
+        { $limit: limit },
+      ])
+      .exec();
+  }
+
+  async getDepartmentStats(startDate?: string, endDate?: string): Promise<any[]> {
+    const matchStage: any = {};
+    if (startDate || endDate) {
+      matchStage.createdAt = {};
+      if (startDate) matchStage.createdAt.$gte = new Date(startDate);
+      if (endDate) matchStage.createdAt.$lte = new Date(endDate);
+    }
+    return this.ticketModel
+      .aggregate([
+        { $match: matchStage },
+        { 
+          $group: { 
+            _id: '$departmentId', 
+            count: { $sum: 1 },
+          } 
+        },
+        {
+          $lookup: {
+            from: 'departments',
+            localField: '_id',
+            foreignField: '_id',
+            as: 'department',
+          },
+        },
+        { $unwind: { path: '$department', preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            departmentName: { $ifNull: ['$department.name', 'Unassigned'] },
+            count: 1,
+          },
+        },
+        { $sort: { count: -1 } },
+      ])
+      .exec();
+  }
+
   async getAgentStats(startDate?: string, endDate?: string, internalSlaMs: number = 86400000, externalSlaMs: number = 172800000): Promise<any[]> {
     const ticketMatchConditions: any[] = [
       { $eq: ['$assignedTo', '$$userId'] },

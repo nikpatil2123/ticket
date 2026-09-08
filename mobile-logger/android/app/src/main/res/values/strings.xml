@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Ticket Logs</string>
+    <string name="title_activity_main">Ticket Logs</string>
+    <string name="package_name">com.aqr.logs</string>
+    <string name="custom_url_scheme">com.aqr.logs</string>
+</resources>

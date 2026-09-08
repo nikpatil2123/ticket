@@ -97,6 +97,29 @@ export class EmailService implements OnModuleInit, OnModuleDestroy {
     return undefined;
   }
 
+  private extractEmailBody(payload: any): { text: string; html: string } {
+    let text = '';
+    let html = '';
+
+    if (!payload) return { text, html };
+
+    if (payload.mimeType === 'text/plain' && payload.body && payload.body.data) {
+      const data = payload.body.data.replace(/-/g, '+').replace(/_/g, '/');
+      text = Buffer.from(data, 'base64').toString('utf-8');
+    } else if (payload.mimeType === 'text/html' && payload.body && payload.body.data) {
+      const data = payload.body.data.replace(/-/g, '+').replace(/_/g, '/');
+      html = Buffer.from(data, 'base64').toString('utf-8');
+    } else if (payload.parts && Array.isArray(payload.parts)) {
+      for (const part of payload.parts) {
+        const result = this.extractEmailBody(part);
+        if (result.text) text += (text ? '\n' : '') + result.text;
+        if (result.html) html += (html ? '\n' : '') + result.html;
+      }
+    }
+
+    return { text, html };
+  }
+
   private cleanEmailBody(bodyText: string): string {
     if (!bodyText) return '';
     let cleaned = bodyText.replace(/\s*On\s+[\s\S]*?wrote:[\s\S]*/gi, '');
@@ -174,12 +197,21 @@ export class EmailService implements OnModuleInit, OnModuleDestroy {
       } 
       
       if (!connection.lastSyncHistoryId) {
-        // Full fetch / fallback: grab recent unread
+        // Only fetch emails received after the account was explicitly connected
+        const connectionCreatedAtMs = (connection as any).gmailConnectedAt
+          ? new Date((connection as any).gmailConnectedAt).getTime()
+          : new Date((connection as any).updatedAt || (connection as any).createdAt || Date.now()).getTime();
+          
+        const connDate = new Date(connectionCreatedAtMs);
+        const afterDateStr = `${connDate.getUTCFullYear()}/${String(connDate.getUTCMonth() + 1).padStart(2, '0')}/${String(connDate.getUTCDate()).padStart(2, '0')}`;
+
+        // Fetch unread messages with the 'after:' filter
         const res = await gmail.users.messages.list({
           userId: 'me',
-          q: 'is:unread -from:me',
-          maxResults: 10,
+          q: `is:unread -from:me after:${afterDateStr}`,
+          maxResults: 5,
         });
+
         messages = res.data.messages || [];
         
         // Update historyId for next time
@@ -215,6 +247,24 @@ export class EmailService implements OnModuleInit, OnModuleDestroy {
 
         const messageData: any = msgRes.data;
 
+        // Strict fallback filter: ignore ANY email received before or exactly when the account was connected
+        const receivedAtMs = parseInt(messageData.internalDate, 10);
+        const connectionCreatedAtMs = (connection as any).gmailConnectedAt
+          ? new Date((connection as any).gmailConnectedAt).getTime()
+          : new Date((connection as any).updatedAt || (connection as any).createdAt || Date.now()).getTime();
+        
+        if (receivedAtMs <= connectionCreatedAtMs) {
+          this.logger.log(`Skipping old email ${msgId} received before or at the time the account was connected.`);
+          try {
+            await gmail.users.messages.modify({
+              userId: 'me',
+              id: msgId,
+              requestBody: { removeLabelIds: ['UNREAD'] },
+            });
+          } catch (e) {}
+          continue;
+        }
+
         const subject = this.findHeaderRecursive(messageData.payload, 'Subject') || '(no subject)';
         const from = this.findHeaderRecursive(messageData.payload, 'From') || 'Unknown';
         const messageIdHeader = this.findHeaderRecursive(messageData.payload, 'Message-ID');
@@ -225,12 +275,35 @@ export class EmailService implements OnModuleInit, OnModuleDestroy {
 
         this.logger.log(`Parsed email -> ThreadId: ${threadId} | From: ${from} | Subject: ${subject}`);
 
-        const rawBodyText = messageData.snippet || '';
+        const { text: extractedText, html: extractedHtml } = this.extractEmailBody(messageData.payload);
+        const rawBodyText = extractedText || messageData.snippet || '';
         const bodyText = this.cleanEmailBody(rawBodyText);
+        const bodyHtml = extractedHtml || '';
 
         const emailRegex = /<([^>]+)>/;
         const emailMatch = from ? from.match(emailRegex) : null;
         const customerEmail = emailMatch ? emailMatch[1] : from;
+
+        // Ignore automated / no-reply / bounce emails
+        const lowerEmail = customerEmail.toLowerCase();
+        if (
+          lowerEmail.includes('no-reply') ||
+          lowerEmail.includes('noreply') ||
+          lowerEmail.includes('mailer-daemon') ||
+          lowerEmail.includes('bounce') ||
+          lowerEmail === 'elogbook.info@paruluniversity.ac.in' ||
+          this.findHeaderRecursive(messageData.payload, 'Auto-Submitted')
+        ) {
+          this.logger.log(`Ignoring automated/no-reply email from: ${customerEmail}`);
+          try {
+            await gmail.users.messages.modify({
+              userId: 'me',
+              id: msgId,
+              requestBody: { removeLabelIds: ['UNREAD'] },
+            });
+          } catch (e) {}
+          continue;
+        }
 
         const parts = messageData.payload?.parts || [];
         const rawAttachments = this.getAttachmentsFromParts(parts);
@@ -261,6 +334,7 @@ export class EmailService implements OnModuleInit, OnModuleDestroy {
           messageId: messageIdHeader,
           inReplyTo,
           references,
+          bodyHtml,
         };
 
         if (existingTicket) {
@@ -389,10 +463,14 @@ async handleWebhook(payload: any): Promise<void> {
       const auth = await this.googleAuthService.getAuthClient();
       const gmail = google.gmail({ version: 'v1', auth });
 
+      const connectionCreatedAtMs = await this.googleAuthService.getGlobalConnectionDate();
+      const connDate = new Date(connectionCreatedAtMs);
+      const afterDateStr = `${connDate.getUTCFullYear()}/${String(connDate.getUTCMonth() + 1).padStart(2, '0')}/${String(connDate.getUTCDate()).padStart(2, '0')}`;
+
       // Fetch unread messages
       const res = await gmail.users.messages.list({
         userId: 'me',
-        q: 'is:unread -from:me',
+        q: `is:unread -from:me after:${afterDateStr}`,
         maxResults: 5,
       });
 
@@ -423,6 +501,21 @@ async handleWebhook(payload: any): Promise<void> {
         });
 
         const messageData: any = msgRes.data;
+
+        // Strict fallback filter: ignore ANY email received before or exactly when the account was connected
+        const receivedAtMs = parseInt(messageData.internalDate, 10);
+        
+        if (receivedAtMs <= connectionCreatedAtMs) {
+          this.logger.log(`Skipping old email ${msg.id} received before or at the time the global account was connected.`);
+          try {
+            await gmail.users.messages.modify({
+              userId: 'me',
+              id: msg.id,
+              requestBody: { removeLabelIds: ['UNREAD'] },
+            });
+          } catch (e) {}
+          continue;
+        }
 
         const subject =
           this.findHeaderRecursive(messageData.payload, 'Subject') || '(no subject)';
@@ -462,8 +555,10 @@ async handleWebhook(payload: any): Promise<void> {
         }
 
         // Extract basic body text and clean quoted history
-        const rawBodyText = messageData.snippet || '';
+        const { text: extractedText, html: extractedHtml } = this.extractEmailBody(messageData.payload);
+        const rawBodyText = extractedText || messageData.snippet || '';
         const bodyText = this.cleanEmailBody(rawBodyText);
+        const bodyHtml = extractedHtml || '';
 
         this.logger.log(`Processing email from: ${from} | Subject: ${subject}`);
 
@@ -471,6 +566,27 @@ async handleWebhook(payload: any): Promise<void> {
         const emailRegex = /<([^>]+)>/;
         const emailMatch = from ? from.match(emailRegex) : null;
         const customerEmail = emailMatch ? emailMatch[1] : from;
+
+        // Ignore automated / no-reply / bounce emails
+        const lowerEmail = customerEmail.toLowerCase();
+        if (
+          lowerEmail.includes('no-reply') ||
+          lowerEmail.includes('noreply') ||
+          lowerEmail.includes('mailer-daemon') ||
+          lowerEmail.includes('bounce') ||
+          lowerEmail === 'elogbook.info@paruluniversity.ac.in' ||
+          this.findHeaderRecursive(messageData.payload, 'Auto-Submitted')
+        ) {
+          this.logger.log(`Ignoring automated/no-reply email from: ${customerEmail}`);
+          try {
+            await gmail.users.messages.modify({
+              userId: 'me',
+              id: msg.id,
+              requestBody: { removeLabelIds: ['UNREAD'] },
+            });
+          } catch (e) {}
+          continue;
+        }
 
         // Check if a ticket already exists for this Gmail thread ID
 
@@ -511,6 +627,7 @@ async handleWebhook(payload: any): Promise<void> {
             subject,
             bodyText,
             messageId || msg.id,
+            { bodyHtml }
           );
 
           await this.ticketsService.logActivity(
@@ -550,6 +667,7 @@ async handleWebhook(payload: any): Promise<void> {
                 gmailThreadId: threadId,
                 gmailMessageId: msg.id,
                 messageId: messageId || msg.id,
+                bodyHtml: bodyHtml,
               })) as any;
 
               // repository returns { inboxEntryId } when it saved to inbox_entries
@@ -584,6 +702,7 @@ async handleWebhook(payload: any): Promise<void> {
             gmailThreadId: threadId,
             gmailMessageId: msg.id,
             messageId: messageId || msg.id,
+            bodyHtml: bodyHtml,
           })) as any;
 
           const createdTicket = result.ticket;

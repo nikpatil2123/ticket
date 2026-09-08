@@ -13,7 +13,7 @@ export default function AutomationDashboardPage() {
           <p className="text-sm text-muted-foreground mt-1">Connect your central support inbox to ingest emails.</p>
         </div>
         <a 
-          href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/v1'}/auth/google`}
+          href={`${process.env.NEXT_PUBLIC_API_URL || '/v1'}/auth/google`}
           className="px-4 py-2 bg-primary text-primary-foreground rounded-md font-medium text-sm hover:bg-primary/90 transition-colors shadow-sm flex items-center gap-2"
         >
           Connect Google Workspace

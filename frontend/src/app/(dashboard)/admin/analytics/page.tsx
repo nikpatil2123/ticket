@@ -5,7 +5,7 @@ import { apiClient } from '@/lib/api/api-client';
 import { Loader2, Ticket, CheckCircle2, Clock, Inbox, AlertCircle, Archive } from 'lucide-react';
 
 export default function AnalyticsDashboardPage() {
-  const [stats, setStats] = useState<any>(null);
+  const [statsData, setStatsData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -21,7 +21,7 @@ export default function AnalyticsDashboardPage() {
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
       const res = await apiClient.get(`/tickets/stats?${params.toString()}`);
-      setStats(res.data.data);
+      setStatsData(res.data.data);
     } catch (err) {
       console.error('Failed to load stats', err);
     } finally {
@@ -29,11 +29,13 @@ export default function AnalyticsDashboardPage() {
     }
   };
 
-  if (isLoading && !stats) {
+  if (isLoading && !statsData) {
     return <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-slate-400" /></div>;
   }
 
-  if (!stats) return null;
+  if (!statsData) return null;
+
+  const { stats, topSenders = [], departmentStats = [] } = statsData;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -193,6 +195,69 @@ export default function AnalyticsDashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Additional Stats Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Top Senders */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+          <div className="p-4 border-b border-slate-200 bg-slate-50">
+            <h3 className="font-bold text-sm text-slate-800">Top Ticket Senders</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Emails that have raised the most tickets</p>
+          </div>
+          <div className="flex-1 p-0 overflow-y-auto max-h-80">
+            {topSenders.length === 0 ? (
+              <div className="p-8 text-center text-slate-500 text-sm">No sender data available.</div>
+            ) : (
+              <table className="w-full text-left text-sm text-slate-600">
+                <thead className="text-xs text-slate-500 bg-slate-50 sticky top-0 border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-2 font-medium">Email</th>
+                    <th className="px-4 py-2 font-medium text-right w-24">Tickets</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {topSenders.map((sender: any, i: number) => (
+                    <tr key={sender._id || i} className="hover:bg-slate-50/50">
+                      <td className="px-4 py-3 text-slate-900 font-medium truncate max-w-[200px]" title={sender._id}>{sender._id}</td>
+                      <td className="px-4 py-3 text-right font-bold text-indigo-600">{sender.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        {/* Department Stats */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+          <div className="p-4 border-b border-slate-200 bg-slate-50">
+            <h3 className="font-bold text-sm text-slate-800">Tickets by Department</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Distribution of tickets across departments</p>
+          </div>
+          <div className="flex-1 p-0 overflow-y-auto max-h-80">
+            {departmentStats.length === 0 ? (
+              <div className="p-8 text-center text-slate-500 text-sm">No department data available.</div>
+            ) : (
+              <table className="w-full text-left text-sm text-slate-600">
+                <thead className="text-xs text-slate-500 bg-slate-50 sticky top-0 border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-2 font-medium">Department</th>
+                    <th className="px-4 py-2 font-medium text-right w-24">Tickets</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {departmentStats.map((dept: any, i: number) => (
+                    <tr key={dept._id || i} className="hover:bg-slate-50/50">
+                      <td className="px-4 py-3 text-slate-900 font-medium truncate max-w-[200px]" title={dept.departmentName}>{dept.departmentName}</td>
+                      <td className="px-4 py-3 text-right font-bold text-indigo-600">{dept.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

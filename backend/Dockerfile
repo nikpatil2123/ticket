@@ -7,13 +7,16 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci
+RUN npm install
 
 # Copy source code
 COPY . .
 
 # Build the NestJS application
 RUN npm run build
+
+# Compile the standalone admin seed script for the production image
+RUN npx tsc seed-admin.ts --outDir dist --module nodenext --moduleResolution nodenext --target ES2023 --esModuleInterop --skipLibCheck --declaration false --sourceMap false
 
 # Production Stage
 FROM node:20-alpine
@@ -25,10 +28,10 @@ COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/dist ./dist
 
 # Install ONLY production dependencies
-RUN npm ci --only=production
+RUN npm install --only=production
 
 # Expose the API port
 EXPOSE 3001
 
 # Start the application
-CMD ["npm", "run", "start:prod"]
+CMD ["node", "dist/src/main.js"]

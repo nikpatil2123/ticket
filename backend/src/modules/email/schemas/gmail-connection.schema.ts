@@ -44,6 +44,9 @@ export class GmailConnection extends Document {
   lastSyncHistoryId?: string;
 
   @Prop({ required: false })
+  gmailConnectedAt?: Date;
+
+  @Prop({ required: false })
   lastSyncAt?: Date;
 }
 

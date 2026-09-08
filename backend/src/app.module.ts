@@ -14,10 +14,13 @@ import { AiModule } from './modules/ai/ai.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { TemplatesModule } from './modules/templates/templates.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { TerminusModule } from '@nestjs/terminus';
 import { LoggerModule } from 'nestjs-pino';
 import { HealthController } from './health.controller';
+import { LogsModule } from './modules/logs/logs.module';
+
+import { ActivityLoggerInterceptor } from './modules/logs/logs.interceptor';
 
 @Module({
   imports: [
@@ -65,12 +68,17 @@ import { HealthController } from './health.controller';
     AuthModule,
     TemplatesModule,
     TerminusModule,
+    LogsModule,
   ],
   controllers: [HealthController],
   providers: [
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ActivityLoggerInterceptor,
     },
   ],
 })

@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 async function createAdmin() {
-  const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/ticket_db';
+  const mongoUri = process.env.MONGO_URI || 'mongodb://mongodb:27017/ticket';
   await mongoose.connect(mongoUri);
 
   const db = mongoose.connection.db;

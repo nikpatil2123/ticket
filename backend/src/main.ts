@@ -12,7 +12,16 @@ async function bootstrap() {
   app.useLogger(app.get(Logger));
 
   // Security middlewares
-  app.use(helmet());
+  const helmetMiddleware = helmet();
+  app.use((req: any, res: any, next: any) => {
+    // Disable Helmet security headers (like X-Frame-Options) ONLY for the logs view route
+    // so the Capacitor mobile app can embed it inside an iframe.
+    if (req.path === '/v1/logs/view') {
+      next();
+    } else {
+      helmetMiddleware(req, res, next);
+    }
+  });
   app.use(compression());
   app.use(cookieParser());
 

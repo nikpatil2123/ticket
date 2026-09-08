@@ -59,9 +59,11 @@ export class GoogleAuthController {
         await this.googleAuthService.exchangeCodeForGlobalTokens(code);
       }
 
-      res.redirect('http://localhost:3000/admin/departments?googleAuth=success');
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      res.redirect(`${frontendUrl}/admin/departments?googleAuth=success`);
     } catch (error) {
-      res.redirect('http://localhost:3000/admin/departments?googleAuth=error');
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      res.redirect(`${frontendUrl}/admin/departments?googleAuth=error`);
     }
   }
 }

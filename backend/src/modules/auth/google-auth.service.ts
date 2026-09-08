@@ -56,6 +56,13 @@ export class GoogleAuthService {
       { $set: { value: tokens } },
       { upsert: true, returnDocument: 'after' },
     );
+
+    await this.settingsModel.findOneAndUpdate(
+      { key: 'global_gmail_connected_at' },
+      { $set: { value: { timestamp: Date.now() } } },
+      { upsert: true, returnDocument: 'after' },
+    );
+
     this.logger.log('Global Tokens saved to database');
     return tokens;
   }
@@ -132,6 +139,7 @@ export class GoogleAuthService {
           scopes: tokens.scope ? tokens.scope.split(' ') : [],
           isActive: true,
           status: GmailConnectionStatus.CONNECTED,
+          gmailConnectedAt: new Date(),
         },
       },
       { upsert: true, returnDocument: 'after' }
@@ -157,6 +165,14 @@ export class GoogleAuthService {
     }
     this.oauth2Client.setCredentials(settings.value);
     return this.oauth2Client;
+  }
+
+  async getGlobalConnectionDate(): Promise<number> {
+    const settings = await this.settingsModel.findOne({
+      key: 'global_gmail_connected_at',
+    });
+    if (!settings || !settings.value || !settings.value.timestamp) return Date.now();
+    return settings.value.timestamp;
   }
 
   // New method to get a specific connection's client

@@ -1,0 +1,6 @@
+version: '3.8'
+services:
+  test:
+    image: alpine
+    env_file: test.env
+    command: env

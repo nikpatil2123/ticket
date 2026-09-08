@@ -121,7 +121,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="ml-auto flex items-center gap-3">
             {user.role === 'ADMIN' && (
               <a 
-                href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/v1'}/auth/google`}
+                href={`${process.env.NEXT_PUBLIC_API_URL || '/v1'}/auth/google`}
                 className="text-xs font-semibold px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-md transition-colors shadow-sm flex items-center gap-1.5"
               >
                 <span>Connect Google Account</span>

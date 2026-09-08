@@ -27,7 +27,11 @@ export class TicketsService {
   }
 
   async getTicketStats(departmentId?: string, startDate?: string, endDate?: string): Promise<any> {
-    const rawStats = await this.ticketsRepository.getTicketStats(departmentId, startDate, endDate);
+    const [rawStats, topSenders, departmentStats] = await Promise.all([
+      this.ticketsRepository.getTicketStats(departmentId, startDate, endDate),
+      this.ticketsRepository.getTopSenders(departmentId, startDate, endDate),
+      this.ticketsRepository.getDepartmentStats(startDate, endDate),
+    ]);
 
     // Format the stats into a friendly object
     const stats: Record<string, number> = {
@@ -62,7 +66,11 @@ export class TicketsService {
       }
     });
 
-    return stats;
+    return {
+      stats,
+      topSenders,
+      departmentStats,
+    };
   }
 
   async getAgentStats(startDate?: string, endDate?: string): Promise<any[]> {

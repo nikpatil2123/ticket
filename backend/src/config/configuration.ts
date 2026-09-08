@@ -23,5 +23,9 @@ export default () => ({
   cloudflare: {
     accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
     apiToken: process.env.CLOUDFLARE_API_TOKEN,
+  },
+  smtp: {
+    email: process.env.SMTP_EMAIL,
+    password: process.env.SMTP_APP_PASSWORD,
   }
 });

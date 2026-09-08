@@ -43,6 +43,12 @@ export class User extends Document {
   @Prop()
   resetPasswordExpires: Date;
 
+  @Prop()
+  loginOtp: string;
+
+  @Prop()
+  loginOtpExpiresAt: Date;
+
   @Prop({ default: 0 })
   failedLoginAttempts: number;
 
