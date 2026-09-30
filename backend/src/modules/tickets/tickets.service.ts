@@ -8,6 +8,7 @@ import { TicketsRepository } from './tickets.repository';
 import { Ticket, TicketStatus, TicketPriority } from './schemas/ticket.schema';
 import { UpdateTicketStatusDto } from './dto/update-ticket-status.dto';
 import { SettingsService } from '../settings/settings.service';
+import { FeedbackService } from '../feedback/feedback.service';
 
 @Injectable()
 export class TicketsService {
@@ -16,21 +17,33 @@ export class TicketsService {
   constructor(
     private readonly ticketsRepository: TicketsRepository,
     private readonly settingsService: SettingsService,
+    private readonly feedbackService: FeedbackService,
   ) {}
 
   async getAllTickets(
     departmentId?: string,
     tatType?: string,
     priority?: string,
+    status?: string,
+    search?: string,
+    subDepartmentId?: string,
   ): Promise<Ticket[]> {
-    return this.ticketsRepository.findAll(departmentId, tatType, priority);
+    return this.ticketsRepository.findAll(
+      departmentId,
+      tatType,
+      priority,
+      status,
+      search,
+      subDepartmentId,
+    );
   }
 
   async getTicketStats(departmentId?: string, startDate?: string, endDate?: string): Promise<any> {
-    const [rawStats, topSenders, departmentStats] = await Promise.all([
+    const [rawStats, topSenders, departmentStats, subDepartmentStats] = await Promise.all([
       this.ticketsRepository.getTicketStats(departmentId, startDate, endDate),
       this.ticketsRepository.getTopSenders(departmentId, startDate, endDate),
       this.ticketsRepository.getDepartmentStats(startDate, endDate),
+      this.ticketsRepository.getSubDepartmentStats(departmentId, startDate, endDate),
     ]);
 
     // Format the stats into a friendly object
@@ -70,6 +83,7 @@ export class TicketsService {
       stats,
       topSenders,
       departmentStats,
+      subDepartmentStats,
     };
   }
 
@@ -223,7 +237,12 @@ export class TicketsService {
       extraFields.pausedAt = null;
     }
 
-    if (updateDto.status === TicketStatus.IN_PROGRESS && !ticket.inProgressAt) {
+    if (
+      (updateDto.status === TicketStatus.IN_PROGRESS ||
+        updateDto.status === TicketStatus.RESOLVED ||
+        updateDto.status === TicketStatus.CLOSED) &&
+      !ticket.inProgressAt
+    ) {
       extraFields.inProgressAt = new Date();
     }
 
@@ -235,7 +254,10 @@ export class TicketsService {
       extraFields,
     );
 
-    if (updateDto.status === TicketStatus.CLOSED && user) {
+    // Check if department is Miscellaneous to skip automated emails/messages
+    const isMiscellaneous = (ticket.departmentId as any)?.name?.toLowerCase() === 'miscellaneous';
+
+    if (updateDto.status === TicketStatus.CLOSED && user && !isMiscellaneous) {
       const agentName =
         `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Agent';
       await this.ticketsRepository.addMessage(
@@ -260,8 +282,8 @@ export class TicketsService {
     );
 
     // If closing, send the specific closure email to the user as a reply thread
-    if (updateDto.status === TicketStatus.CLOSED && googleAuthService) {
-      const bodyText = `Hello,\n\nYour support ticket ${ticket.ticketNumber} has been marked as CLOSED.\n\nResolution Note: ${updateDto.resolutionNote || 'Resolved by agent'}\n\nBest regards,\nParul University Support`;
+    if (updateDto.status === TicketStatus.CLOSED && googleAuthService && !isMiscellaneous) {
+      const bodyText = `Hello,\n\nYour support ticket ${ticket.ticketNumber} has been marked as CLOSED.\n\nResolution Note: ${updateDto.resolutionNote || 'Resolved by agent'}\n\n**DO NOT REPLY TO THIS MAIL YOUR TICKET IS MARKED CLOSED**\n\nBest regards,\nParul University Support`;
       try {
         await this.ticketsRepository.addMessage(
           id,
@@ -287,15 +309,40 @@ export class TicketsService {
       } catch (err) {
         this.logger.error('Failed to send automated closure email', err);
       }
+    } else if (updateDto.status === TicketStatus.RESOLVED && googleAuthService && !isMiscellaneous) {
+      // Generate Feedback Token and send review link
+      try {
+        const token = await this.feedbackService.generateToken(id, ticket.customerEmail); // Using customer email as user identifier for now
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const reviewLink = `${frontendUrl}/feedback?token=${token}`;
+
+        const bodyText = `Hello,\n\nYour support ticket ${ticket.ticketNumber} has been marked as RESOLVED.\n\nWe would love to hear your feedback! Please take a moment to rate your experience using the link below (valid for 24 hours):\n\n${reviewLink}\n\nResolution Note: ${updateDto.resolutionNote || 'Resolved by agent'}\n\nBest regards,\nParul University Support`;
+        
+        // Directly send email without adding it to the ticket's message timeline
+        await this.sendEmailDirectly(
+          ticket,
+          'Re:',
+          bodyText,
+          googleAuthService,
+        );
+        await this.ticketsRepository.logActivity(
+          id,
+          actorId,
+          'SYSTEM_REPLY',
+          {},
+          'Automated resolution email with feedback link sent',
+        );
+      } catch (err) {
+        this.logger.error('Failed to send feedback link email', err);
+      }
     } else if (
       updateDto.status !== ticket.status &&
-      updateDto.status !== TicketStatus.CLOSED &&
-      updateDto.status !== TicketStatus.NEW &&
-      googleAuthService
+      updateDto.status === TicketStatus.IN_PROGRESS &&
+      googleAuthService &&
+      !isMiscellaneous
     ) {
-      // Send a generic status update email for all other status changes
-      const readableStatus = updateDto.status.replace(/_/g, ' ');
-      const bodyText = `Hello,\n\nThe status of your support ticket ${ticket.ticketNumber} has been updated to: ${readableStatus}\n\nBest regards,\nParul University Support`;
+      // Send the ticket number and status when it moves to In Progress
+      const bodyText = `Hello,\n\nWe have received your support request. Your ticket number is ${ticket.ticketNumber} and its status is now: In Progress.\n\nOur team is working on it.\n\nBest regards,\nParul University Support`;
       try {
         await this.ticketsRepository.addMessage(
           id,
@@ -316,7 +363,7 @@ export class TicketsService {
           actorId,
           'SYSTEM_REPLY',
           {},
-          `Automated status update email sent (${readableStatus})`,
+          `Automated status update email sent (In Progress)`,
         );
       } catch (err) {
         this.logger.error('Failed to send automated status email', err);
@@ -398,6 +445,34 @@ export class TicketsService {
     return updatedTicket;
   }
 
+  async updateFlag(
+    id: string,
+    isFlagged: boolean,
+    actorId: string,
+  ): Promise<Ticket> {
+    const ticket = await this.getTicket(id);
+
+    const updatedTicket = await this.ticketsRepository.updateTicketFlag(
+      id,
+      isFlagged,
+    );
+
+    if (!updatedTicket) throw new NotFoundException('Failed to update ticket flag');
+
+    await this.ticketsRepository.logActivity(
+      id,
+      actorId,
+      'FLAG_UPDATED',
+      {
+        oldFlag: ticket.isFlagged || false,
+        newFlag: isFlagged,
+      },
+      `User ${isFlagged ? 'flagged' : 'unflagged'} the ticket`,
+    );
+
+    return updatedTicket;
+  }
+
   async updateDepartment(
     id: string,
     departmentId: string,
@@ -429,6 +504,40 @@ export class TicketsService {
 
     if (!updatedTicket)
       throw new NotFoundException('Failed to update ticket department');
+    return updatedTicket;
+  }
+
+  async updateSubDepartment(
+    id: string,
+    subDepartmentId: string,
+    actorId: string,
+  ): Promise<Ticket> {
+    const ticket = await this.getTicket(id);
+
+    if (ticket.status === TicketStatus.CLOSED) {
+      throw new BadRequestException(
+        'Cannot update sub-department of a CLOSED ticket',
+      );
+    }
+
+    const updatedTicket = await this.ticketsRepository.updateTicketSubDepartment(
+      id,
+      subDepartmentId,
+    );
+
+    await this.ticketsRepository.logActivity(
+      id,
+      actorId,
+      'SUB_DEPARTMENT_CHANGED',
+      {
+        oldSubDepartment: ticket.subDepartmentId?.toString() || 'UNASSIGNED',
+        newSubDepartment: subDepartmentId,
+      },
+      'Admin manually reassigned sub-department',
+    );
+
+    if (!updatedTicket)
+      throw new NotFoundException('Failed to update ticket sub-department');
     return updatedTicket;
   }
 
@@ -468,6 +577,8 @@ export class TicketsService {
     subjectPrefix: string,
     bodyText: string,
     googleAuthService: any,
+    cc?: string[],
+    to?: string[],
   ) {
     let auth;
     if (ticket.gmailConnectionId) {
@@ -536,10 +647,14 @@ export class TicketsService {
       }
     }
 
+    const toEmails = to && to.length > 0 ? to.join(', ') : ticket.customerEmail;
     const emailLines = [
       `From: ${fromEmail}`,
-      `To: ${ticket.customerEmail}`,
+      `To: ${toEmails}`,
     ];
+    if (cc && cc.length > 0) {
+      emailLines.push(`Cc: ${cc.join(', ')}`);
+    }
     if (subject) {
       const encodedSubject = `=?utf-8?B?${Buffer.from(subject, 'utf-8').toString('base64')}?=`;
       emailLines.push(`Subject: ${encodedSubject}`);
@@ -589,6 +704,10 @@ export class TicketsService {
     const { messages, logs } = await this.ticketsRepository.getTimeline(
       (ticket as any).id || (ticket as any)._id,
     );
+    
+    if ((ticket as any).hasUnreadReply) {
+      await this.ticketsRepository.markAsRead(id);
+    }
 
     // Merge and sort chronologically
     const timeline = [
@@ -628,6 +747,8 @@ export class TicketsService {
     bodyText: string,
     actorId: string,
     googleAuthService: any,
+    cc?: string[],
+    to?: string[],
   ) {
     const ticket = await this.getTicket(id);
 
@@ -636,9 +757,11 @@ export class TicketsService {
       id,
       'OUTBOUND',
       'support@acme.com', // Would normally be dynamically fetched from SystemSettings
-      [ticket.customerEmail],
+      to && to.length > 0 ? to : [ticket.customerEmail],
       `Re: ${ticket.subject}`,
       bodyText,
+      undefined,
+      { cc }
     );
     await this.ticketsRepository.logActivity(
       id,
@@ -650,7 +773,7 @@ export class TicketsService {
 
     // Actually send the email via Gmail API
     try {
-      await this.sendEmailDirectly(ticket, 'Re:', bodyText, googleAuthService);
+      await this.sendEmailDirectly(ticket, 'Re:', bodyText, googleAuthService, cc, to);
     } catch (e) {
       console.error('Failed to send reply email', e);
     }

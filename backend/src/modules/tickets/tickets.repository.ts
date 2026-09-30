@@ -16,15 +16,43 @@ export class TicketsRepository {
     @InjectModel(Attachment.name) private attachmentModel: Model<Attachment>,
   ) {}
 
-  async findAll(departmentId?: string, tatType?: string, priority?: string): Promise<Ticket[]> {
+  async findAll(
+    departmentId?: string,
+    tatType?: string,
+    priority?: string,
+    status?: string,
+    search?: string,
+    subDepartmentId?: string,
+  ): Promise<Ticket[]> {
     const filter: any = {};
     if (departmentId) filter.departmentId = departmentId;
+    if (subDepartmentId) {
+      if (subDepartmentId === 'UNASSIGNED') {
+        filter.subDepartmentId = null;
+      } else {
+        filter.subDepartmentId = subDepartmentId;
+      }
+    }
     if (tatType) filter.tatType = tatType;
     if (priority) filter.priority = priority;
+    if (status) {
+      if (status.includes(',')) {
+        filter.status = { $in: status.split(',') };
+      } else {
+        filter.status = status;
+      }
+    }
+    if (search) {
+      filter.$or = [
+        { ticketNumber: { $regex: search, $options: 'i' } },
+        { subject: { $regex: search, $options: 'i' } },
+        { customerEmail: { $regex: search, $options: 'i' } },
+      ];
+    }
     return this.ticketModel
       .find(filter)
       .sort({ updatedAt: -1 })
-      .populate('departmentId assignedTo')
+      .populate('departmentId assignedTo subDepartmentId')
       .exec();
   }
 
@@ -49,6 +77,19 @@ export class TicketsRepository {
       .findByIdAndUpdate(
         id,
         { $set: { priority } },
+        { new: true }
+      )
+      .exec();
+  }
+
+  async updateTicketFlag(
+    id: string,
+    isFlagged: boolean,
+  ): Promise<Ticket | null> {
+    return this.ticketModel
+      .findByIdAndUpdate(
+        id,
+        { $set: { isFlagged } },
         { new: true }
       )
       .exec();
@@ -139,6 +180,45 @@ export class TicketsRepository {
       .exec();
   }
 
+  async getSubDepartmentStats(departmentId?: string, startDate?: string, endDate?: string): Promise<any[]> {
+    const matchStage: any = {};
+    if (departmentId) {
+      matchStage.departmentId = new mongoose.Types.ObjectId(departmentId);
+    }
+    if (startDate || endDate) {
+      matchStage.createdAt = {};
+      if (startDate) matchStage.createdAt.$gte = new Date(startDate);
+      if (endDate) matchStage.createdAt.$lte = new Date(endDate);
+    }
+    return this.ticketModel
+      .aggregate([
+        { $match: matchStage },
+        { 
+          $group: { 
+            _id: '$subDepartmentId', 
+            count: { $sum: 1 },
+          } 
+        },
+        {
+          $lookup: {
+            from: 'subdepartments',
+            localField: '_id',
+            foreignField: '_id',
+            as: 'subDepartment',
+          },
+        },
+        { $unwind: { path: '$subDepartment', preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            subDepartmentName: { $ifNull: ['$subDepartment.name', 'Unassigned'] },
+            count: 1,
+          },
+        },
+        { $sort: { count: -1 } },
+      ])
+      .exec();
+  }
+
   async getAgentStats(startDate?: string, endDate?: string, internalSlaMs: number = 86400000, externalSlaMs: number = 172800000): Promise<any[]> {
     const ticketMatchConditions: any[] = [
       { $eq: ['$assignedTo', '$$userId'] },
@@ -219,6 +299,22 @@ export class TicketsRepository {
           },
         },
         {
+          $lookup: {
+            from: 'reviews',
+            let: { agentId: '$_id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $eq: ['$agentId', '$$agentId'],
+                  },
+                },
+              },
+            ],
+            as: 'agentReviews',
+          },
+        },
+        {
           $project: {
             _id: 1,
             agentName: {
@@ -234,6 +330,7 @@ export class TicketsRepository {
             },
             agentEmail: '$email',
             closedCount: { $size: '$closedTickets' },
+            totalRequestClosed: { $sum: '$closedTickets.requestCount' },
             avgCloseTimeMs: { $avg: '$closedTickets.resolutionTimeMs' },
             withinInternalSLA: {
               $size: {
@@ -263,6 +360,8 @@ export class TicketsRepository {
                 },
               },
             },
+            reviewCount: { $size: '$agentReviews' },
+            avgRating: { $avg: '$agentReviews.rating' },
           },
         },
       ])
@@ -446,6 +545,12 @@ export class TicketsRepository {
       .exec();
   }
 
+  async markAsRead(id: string): Promise<void> {
+    await this.ticketModel
+      .findByIdAndUpdate(id, { hasUnreadReply: false }, { timestamps: false })
+      .exec();
+  }
+
   async updateTicketDepartment(
     id: string,
     departmentId: string,
@@ -456,6 +561,23 @@ export class TicketsRepository {
         id,
         {
           departmentId: new mongoose.Types.ObjectId(departmentId),
+          updatedAt: new Date(),
+        },
+        { returnDocument: 'after' },
+      )
+      .exec();
+  }
+
+  async updateTicketSubDepartment(
+    id: string,
+    subDepartmentId: string,
+  ): Promise<Ticket | null> {
+    const mongoose = require('mongoose');
+    return this.ticketModel
+      .findByIdAndUpdate(
+        id,
+        {
+          subDepartmentId: subDepartmentId ? new mongoose.Types.ObjectId(subDepartmentId) : null,
           updatedAt: new Date(),
         },
         { returnDocument: 'after' },
@@ -513,6 +635,7 @@ export class TicketsRepository {
     const logs = await this.activityLogModel
       .find({ ticketId })
       .sort({ createdAt: 1 })
+      .populate('actorId', 'firstName lastName email')
       .lean()
       .exec();
 
@@ -592,7 +715,7 @@ export class TicketsRepository {
     }
 
     const intentName = ticketData.aiClassification?.intent || 'UNASSIGNED';
-    const supportedIntents = ['SALARY', 'MIS_DETAILS_CHANGE', 'LEAVE', 'ATTENDANCE'];
+    const supportedIntents = ['SALARY', 'MIS_DETAILS_CHANGE', 'LEAVE', 'ATTENDANCE', 'UNASSIGNED'];
     const isOther = !deptId && !supportedIntents.includes(intentName);
 
     // If the email does not belong to supported departments and has no deptId, do NOT create a ticket.
@@ -624,6 +747,7 @@ export class TicketsRepository {
       priority: 'P3' as TicketPriority,
       gmailConnectionId: metadata?.gmailConnectionId,
       gmailThreadId: metadata?.gmailThreadId,
+      hasUnreadReply: true,
     };
 
     ticketPayload.ticketNumber = `TKT-${Date.now()}`;
@@ -680,10 +804,22 @@ export class TicketsRepository {
       ...metadata,
     });
 
-    // Touch the ticket's updatedAt timestamp so it jumps to top of queue
-    await this.ticketModel
-      .findByIdAndUpdate(ticketId, { updatedAt: new Date() })
-      .exec();
+    const ticket = await this.ticketModel.findById(ticketId).exec();
+    if (ticket) {
+      ticket.set('updatedAt', new Date());
+      if (direction === 'INBOUND') {
+        ticket.hasUnreadReply = true;
+        if (
+          ticket.status === TicketStatus.CLOSED ||
+          ticket.status === TicketStatus.RESOLVED
+        ) {
+          ticket.status = TicketStatus.OPEN;
+        }
+      } else {
+        ticket.hasUnreadReply = false;
+      }
+      await ticket.save();
+    }
 
     return message.save();
   }

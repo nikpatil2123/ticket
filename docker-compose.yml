@@ -2,6 +2,7 @@ version: '3.8'
 
 services:
   backend:
+    image: idknik/ticket-backend:latest
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -16,13 +17,14 @@ services:
       - PORT=3001
       - MONGO_URI=${MONGO_URI:-mongodb://mongodb:27017/ticket}
       - JWT_SECRET=${JWT_SECRET:-supersecretjwt}
-      - FRONTEND_URL=http://localhost:3000
-      - SMTP_EMAIL=${SMTP_EMAIL}
-      - SMTP_APP_PASSWORD=${SMTP_APP_PASSWORD}
+      - FRONTEND_URL=http://aqr.paruluniversity.ac.in
+      - SMTP_EMAIL=elogbook.info@paruluniversity.ac.in
+      - SMTP_APP_PASSWORD=qydf rvwb iltt yzdy
     networks:
       - ticket-network
 
   frontend:
+    image: idknik/ticket-frontend:latest
     build:
       context: ./frontend
       dockerfile: Dockerfile

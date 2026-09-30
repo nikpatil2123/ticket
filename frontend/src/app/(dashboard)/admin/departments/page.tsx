@@ -18,6 +18,12 @@ export default function DepartmentsPage() {
   const [editingDept, setEditingDept] = useState<any>(null);
   const [formData, setFormData] = useState({ name: '', description: '', supportEmailAlias: '' });
 
+  // Sub-Department state
+  const [showSubDeptModal, setShowSubDeptModal] = useState(false);
+  const [selectedDeptForSub, setSelectedDeptForSub] = useState<any>(null);
+  const [subDepartments, setSubDepartments] = useState<any[]>([]);
+  const [newSubDeptName, setNewSubDeptName] = useState('');
+
   useEffect(() => {
     fetchData();
     const authStatus = searchParams.get('googleAuth');
@@ -95,6 +101,45 @@ export default function DepartmentsPage() {
     window.location.href = `${apiUrl}/v1/auth/google/department?departmentId=${deptId}&token=${token}`;
   };
 
+  const handleOpenSubDeptModal = async (dept: any) => {
+    setSelectedDeptForSub(dept);
+    setShowSubDeptModal(true);
+    try {
+      const res = await apiClient.get(`/sub-departments?departmentId=${dept._id}`);
+      setSubDepartments(res.data.data);
+    } catch (err: any) {
+      alert(err.message || 'Failed to fetch sub-departments');
+    }
+  };
+
+  const handleAddSubDept = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSubDeptName.trim()) return;
+    try {
+      await apiClient.post('/sub-departments', {
+        name: newSubDeptName,
+        departmentId: selectedDeptForSub._id,
+        isActive: true,
+      });
+      setNewSubDeptName('');
+      const res = await apiClient.get(`/sub-departments?departmentId=${selectedDeptForSub._id}`);
+      setSubDepartments(res.data.data);
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message || 'Failed to add sub-department');
+    }
+  };
+
+  const handleDeleteSubDept = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this sub-department?')) return;
+    try {
+      await apiClient.delete(`/sub-departments/${id}`);
+      const res = await apiClient.get(`/sub-departments?departmentId=${selectedDeptForSub._id}`);
+      setSubDepartments(res.data.data);
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete sub-department');
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
@@ -144,10 +189,16 @@ export default function DepartmentsPage() {
                   )}
                 </div>
                 
-                <div className="flex gap-2 justify-end border-t pt-4">
+                <div className="flex flex-wrap gap-2 justify-end border-t pt-4 mt-auto">
+                  <button 
+                    onClick={() => handleOpenSubDeptModal(dept)}
+                    className="px-3 py-1.5 text-xs font-medium border rounded hover:bg-muted"
+                  >
+                    Sub-Departments
+                  </button>
                   <button 
                     onClick={() => handleConnectGmail(dept._id)}
-                    className={`px-3 py-1.5 text-xs font-medium border rounded flex-1 ${connectedAccount ? 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50' : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+                    className={`px-3 py-1.5 text-xs font-medium border rounded ${connectedAccount ? 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50' : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
                   >
                     {connectedAccount ? 'Reconnect Gmail' : 'Connect Gmail'}
                   </button>
@@ -222,6 +273,55 @@ export default function DepartmentsPage() {
                   Save Department
                 </button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Sub-Departments Modal */}
+      {showSubDeptModal && selectedDeptForSub && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-card border rounded-xl max-w-md w-full p-6 space-y-6 shadow-xl">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-bold">Sub-Departments for {selectedDeptForSub.name}</h2>
+              <button onClick={() => setShowSubDeptModal(false)} className="text-muted-foreground hover:text-foreground">&times;</button>
+            </div>
+            
+            <div className="space-y-4">
+              {subDepartments.length === 0 ? (
+                <div className="text-sm text-muted-foreground text-center py-4">No sub-departments found.</div>
+              ) : (
+                <ul className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                  {subDepartments.map(sub => (
+                    <li key={sub._id} className="flex justify-between items-center p-2 border rounded-md text-sm">
+                      <span className="font-medium">{sub.name}</span>
+                      <button 
+                        onClick={() => handleDeleteSubDept(sub._id)}
+                        className="text-xs text-red-600 hover:underline font-medium"
+                      >
+                        Delete
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <form onSubmit={handleAddSubDept} className="flex gap-2 pt-4 border-t">
+              <input 
+                type="text"
+                required
+                placeholder="New sub-department name"
+                value={newSubDeptName}
+                onChange={(e) => setNewSubDeptName(e.target.value)}
+                className="flex-1 px-3 py-2 border rounded-md text-sm bg-transparent"
+              />
+              <button 
+                type="submit" 
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90"
+              >
+                Add
+              </button>
             </form>
           </div>
         </div>

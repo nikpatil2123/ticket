@@ -58,7 +58,8 @@ export class UsersController {
     const user = req.user;
 
     if (body.roleId) {
-      const isAdmin = user?.role === 'ADMIN' || user?.roleId?.name === 'ADMIN';
+      const userRole = user?.role || user?.roleId?.name;
+      const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
       if (!isAdmin) {
         throw new ForbiddenException('Only admins can change user roles');
       }

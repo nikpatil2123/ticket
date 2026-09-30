@@ -3,22 +3,40 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Menu } from 'lucide-react';
 import { apiClient } from '@/lib/api/api-client';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<any>(null);
   const [isTatOpen, setIsTatOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const router = useRouter();
+
+  const [originalRole, setOriginalRole] = useState<string>('');
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
+      const parsedUser = JSON.parse(storedUser);
+      setOriginalRole(parsedUser.role);
+      const activeRole = localStorage.getItem('activeRole');
+      if (activeRole) {
+        parsedUser.role = activeRole;
+      }
+      setUser(parsedUser);
     } else {
       router.push('/login');
     }
   }, [router]);
+
+  const handleRoleSwitch = (newRole: string) => {
+    if (!user) return;
+    const updatedUser = { ...user, role: newRole };
+    setUser(updatedUser);
+    localStorage.setItem('activeRole', newRole);
+    // Force a hard reload to ensure all child components remount with the new role
+    window.location.reload();
+  };
 
   const handleLogout = async () => {
     try {
@@ -27,6 +45,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       console.error('Logout failed', e);
     }
     localStorage.removeItem('user');
+    localStorage.removeItem('activeRole');
     router.push('/login');
   };
 
@@ -35,7 +54,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col md:flex-row font-sans">
       {/* Sidebar Navigation */}
-      <aside className="w-full md:w-64 bg-slate-900 text-slate-100 hidden md:flex flex-col p-4 border-r border-slate-800">
+      <aside className={`${isSidebarOpen ? 'w-full md:w-64 p-4 flex' : 'hidden'} bg-slate-900 text-slate-100 flex-col border-r border-slate-800 transition-all duration-300`}>
         <div className="mb-6 px-2 py-1 flex items-center gap-3 border-b border-slate-800 pb-4">
           <div className="h-8 w-8 rounded-lg bg-red-800 flex items-center justify-center font-bold text-white text-sm tracking-widest shadow-sm">
             PU
@@ -52,7 +71,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             Ticket Queue
           </Link>
           
-          {user.role === 'ADMIN' && (
+          {(user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') && (
             <>
               <div className="pt-5 pb-2 px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                 Administration
@@ -63,9 +82,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Link href="/admin/agent-analytics" className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-md text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
                 Agent Analytics
               </Link>
-              <Link href="/admin/team" className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-md text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
-                Team Management
-              </Link>
+              {user.role === 'SUPER_ADMIN' && (
+                <>
+                  <Link href="/admin/feedback-tracker" className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-md text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
+                    Feedback Tracker
+                  </Link>
+                  <Link href="/admin/team" className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-md text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
+                    Team Management
+                  </Link>
+                </>
+              )}
               <Link href="/admin/departments" className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-md text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
                 Departments
               </Link>
@@ -93,11 +119,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 )}
               </div>
 
-              <Link href="/admin/tracker" className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-md text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
-                Ticket Tracker
-              </Link>
+              {user.role === 'SUPER_ADMIN' && (
+                <Link href="/admin/tracker" className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-md text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
+                  Ticket Tracker
+                </Link>
+              )}
               <Link href="/admin/automation" className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-md text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
                 Rule Engine
+              </Link>
+              <Link href="/admin/calendar" className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-md text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
+                Working Calendar
               </Link>
               <Link href="/admin/templates" className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-md text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
                 Canned Templates
@@ -117,9 +148,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <main className="flex-1 flex flex-col h-screen overflow-hidden bg-slate-100">
         {/* Top Header */}
         <header className="h-14 border-b border-slate-200 flex items-center justify-between px-6 bg-white shadow-sm">
-          <div className="md:hidden font-bold text-slate-900 text-sm">Parul University Support</div>
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="p-1.5 hover:bg-slate-100 rounded-md text-slate-600 transition-colors"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <div className="md:hidden font-bold text-slate-900 text-sm">Parul University Support</div>
+          </div>
           <div className="ml-auto flex items-center gap-3">
-            {user.role === 'ADMIN' && (
+            {(user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') && (
               <a 
                 href={`${process.env.NEXT_PUBLIC_API_URL || '/v1'}/auth/google`}
                 className="text-xs font-semibold px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-md transition-colors shadow-sm flex items-center gap-1.5"
@@ -127,9 +166,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <span>Connect Google Account</span>
               </a>
             )}
-            <span className="text-xs text-slate-600 bg-slate-100 border border-slate-200 px-3 py-1 rounded-md font-medium">
-              Signed in as: <strong className="text-slate-900">{user.firstName} {user.lastName}</strong> ({user.role})
-            </span>
+            {originalRole === 'SUPER_ADMIN' ? (
+              <div className="flex items-center gap-2 text-xs text-slate-600 bg-slate-100 border border-slate-200 px-3 py-1 rounded-md font-medium">
+                Signed in as: <strong className="text-slate-900">{user.firstName} {user.lastName}</strong>
+                <select 
+                  className="ml-2 bg-white border border-slate-300 rounded px-1 py-0.5 text-xs text-slate-700 outline-none"
+                  value={user.role}
+                  onChange={(e) => handleRoleSwitch(e.target.value)}
+                >
+                  <option value="SUPER_ADMIN">Super Admin View</option>
+                  <option value="ADMIN">Normal Admin View</option>
+                </select>
+              </div>
+            ) : (
+              <span className="text-xs text-slate-600 bg-slate-100 border border-slate-200 px-3 py-1 rounded-md font-medium">
+                Signed in as: <strong className="text-slate-900">{user.firstName} {user.lastName}</strong> ({user.role})
+              </span>
+            )}
           </div>
         </header>
 

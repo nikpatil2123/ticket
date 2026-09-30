@@ -245,6 +245,7 @@ export default function TeamManagementPage() {
                     <option value="AGENT">Agent</option>
                     <option value="TEAM">Team Member</option>
                     <option value="ADMIN">Administrator (Full Access)</option>
+                    <option value="SUPER_ADMIN">Super Administrator (Absolute Access)</option>
                   </select>
                 </div>
                 <div>
@@ -253,9 +254,9 @@ export default function TeamManagementPage() {
                     value={formData.departmentId}
                     onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
                     className="w-full px-3 py-2 border rounded-md text-sm bg-background"
-                    disabled={formData.role === 'ADMIN'}
+                    disabled={formData.role === 'ADMIN' || formData.role === 'SUPER_ADMIN'}
                   >
-                    <option value="">{formData.role === 'ADMIN' ? 'All Departments (Admin)' : 'Select Department...'}</option>
+                    <option value="">{formData.role === 'ADMIN' || formData.role === 'SUPER_ADMIN' ? 'All Departments (Admin)' : 'Select Department...'}</option>
                     {departments.map(dept => (
                       <option key={dept._id} value={dept._id}>
                         {dept.name} Department

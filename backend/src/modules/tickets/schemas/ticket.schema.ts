@@ -47,6 +47,9 @@ export class Ticket extends Document {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Department', index: true })
   departmentId: Department;
 
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'SubDepartment', index: true })
+  subDepartmentId: string;
+
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User' })
   assignedTo: User;
 
@@ -86,6 +89,12 @@ export class Ticket extends Document {
 
   @Prop({ type: Date, default: null })
   inProgressAt?: Date;
+
+  @Prop({ type: Boolean, default: false })
+  hasUnreadReply?: boolean;
+
+  @Prop({ type: Boolean, default: false })
+  isFlagged?: boolean;
 }
 
 export const TicketSchema = SchemaFactory.createForClass(Ticket);

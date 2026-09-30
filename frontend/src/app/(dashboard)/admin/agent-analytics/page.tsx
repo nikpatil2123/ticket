@@ -120,7 +120,9 @@ export default function AgentAnalyticsPage() {
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="px-6 py-4 font-semibold text-slate-900">Agent</th>
+                <th className="px-6 py-4 font-semibold text-slate-900 text-center">Customer Rating</th>
                 <th className="px-6 py-4 font-semibold text-slate-900 text-center">Total Closed</th>
+                <th className="px-6 py-4 font-semibold text-slate-900 text-center">Total Request Closed</th>
                 <th className="px-6 py-4 font-semibold text-slate-900 text-center">Avg Time to Close</th>
                 <th className="px-6 py-4 font-semibold text-slate-900 text-center">Internal SLA Met (≤{internalHrs}h)</th>
                 <th className="px-6 py-4 font-semibold text-slate-900 text-center">External SLA Met (≤{externalHrs}h)</th>
@@ -145,9 +147,24 @@ export default function AgentAnalyticsPage() {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-center">
+                    <div className="flex flex-col items-center">
+                      <span className="font-bold text-lg text-slate-800">
+                        {agentStat.avgRating ? agentStat.avgRating.toFixed(1) : '-'} <span className="text-yellow-500 text-sm">★</span>
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        ({agentStat.reviewCount || 0} reviews)
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-center">
                     <span className="inline-flex items-center gap-1.5 font-medium text-slate-700">
                       <CheckCircle className="w-4 h-4 text-emerald-500" />
                       {agentStat.closedCount}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span className="inline-flex items-center gap-1.5 font-medium text-slate-700">
+                      {agentStat.totalRequestClosed || 0}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-center">

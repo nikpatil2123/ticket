@@ -20,7 +20,10 @@ export class SettingsController {
   @Get(':key')
   async getSetting(@Param('key') key: string, @Req() req: any) {
     const isAdmin =
-      req.user.role === 'ADMIN' || req.user.roleId?.name === 'ADMIN';
+      req.user.role === 'ADMIN' || 
+      req.user.role === 'SUPER_ADMIN' ||
+      req.user.roleId?.name === 'ADMIN' ||
+      req.user.roleId?.name === 'SUPER_ADMIN';
     if (!isAdmin) {
       throw new HttpException('Unauthorized', HttpStatus.FORBIDDEN);
     }
@@ -35,7 +38,10 @@ export class SettingsController {
     @Req() req: any,
   ) {
     const isAdmin =
-      req.user.role === 'ADMIN' || req.user.roleId?.name === 'ADMIN';
+      req.user.role === 'ADMIN' || 
+      req.user.role === 'SUPER_ADMIN' ||
+      req.user.roleId?.name === 'ADMIN' ||
+      req.user.roleId?.name === 'SUPER_ADMIN';
     if (!isAdmin) {
       throw new HttpException('Unauthorized', HttpStatus.FORBIDDEN);
     }

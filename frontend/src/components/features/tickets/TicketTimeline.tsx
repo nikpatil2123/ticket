@@ -1,12 +1,15 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Paperclip, Loader2 } from 'lucide-react';
+import { Send, Paperclip, Loader2, Star } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/api-client';
 
 export default function TicketTimeline({ ticketId }: { ticketId: string }) {
   const [reply, setReply] = useState('');
+  const [toEmails, setToEmails] = useState('');
+  const [ccEmails, setCcEmails] = useState('');
+  const [replyType, setReplyType] = useState<'REPLY_ALL' | 'REPLY'>('REPLY_ALL');
   const [isAdmin, setIsAdmin] = useState(false);
   const [isUpdateCountModalOpen, setIsUpdateCountModalOpen] = useState(false);
   const [newRequestCount, setNewRequestCount] = useState(1);
@@ -18,7 +21,7 @@ export default function TicketTimeline({ ticketId }: { ticketId: string }) {
     const userStr = localStorage.getItem('user');
     if (userStr) {
       const user = JSON.parse(userStr);
-      setIsAdmin(user.role === 'ADMIN' || user.roleId?.name === 'ADMIN');
+      setIsAdmin(user.role === 'ADMIN' || user.roleId?.name === 'ADMIN' || user.role === 'SUPER_ADMIN' || user.roleId?.name === 'SUPER_ADMIN');
     }
   }, []);
 
@@ -38,6 +41,16 @@ export default function TicketTimeline({ ticketId }: { ticketId: string }) {
       const response = await apiClient.get('/departments');
       return response.data.data;
     }
+  });
+
+  const { data: subDepartments } = useQuery({
+    queryKey: ['sub-departments', ticketData?.departmentId?._id],
+    queryFn: async () => {
+      if (!ticketData?.departmentId?._id) return [];
+      const response = await apiClient.get(`/sub-departments?departmentId=${ticketData.departmentId._id}`);
+      return response.data.data;
+    },
+    enabled: !!ticketData?.departmentId?._id,
   });
 
   const { data: timelineData, isLoading: isTimelineLoading } = useQuery({
@@ -61,12 +74,45 @@ export default function TicketTimeline({ ticketId }: { ticketId: string }) {
   useEffect(() => {
     if (timelineData && timelineData.length > 0) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      
+      const inboundMessages = timelineData.filter((item: any) => item.type === 'MESSAGE' && item.data.direction === 'INBOUND');
+      if (inboundMessages.length > 0) {
+        const latestInbound = inboundMessages[inboundMessages.length - 1].data;
+        const sender = latestInbound.from;
+        
+        setToEmails(sender); // Both Reply and Reply All go to the sender of the last email
+        
+        if (replyType === 'REPLY_ALL') {
+          // Combine original 'to' and 'cc' from the incoming message, filter out our own support email
+          const originalTo = latestInbound.to || [];
+          const originalCc = latestInbound.cc || [];
+          const ticketCustomer = ticketData ? ticketData.customerEmail : null;
+          
+          let allOtherParticipants = [...originalTo, ...originalCc];
+          // Always ensure the main person who created the ticket is included in Reply All
+          if (ticketCustomer && ticketCustomer !== sender) {
+            allOtherParticipants.push(ticketCustomer);
+          }
+          
+          allOtherParticipants = allOtherParticipants.filter((email: string) => !email.includes('support@acme.com') && email !== sender);
+          
+          setCcEmails(Array.from(new Set(allOtherParticipants)).join(', '));
+        } else {
+          setCcEmails('');
+        }
+      } else {
+        // Fallback if no inbound messages (e.g. ticket created manually)
+        if (ticketData) {
+          setToEmails(ticketData.customerEmail);
+        }
+        setCcEmails('');
+      }
     }
-  }, [timelineData]);
+  }, [timelineData, replyType, ticketData]);
 
   const sendReplyMutation = useMutation({
-    mutationFn: async (bodyText: string) => {
-      await apiClient.post(`/tickets/${ticketId}/messages`, { bodyText });
+    mutationFn: async ({ bodyText, cc, to }: { bodyText: string, cc?: string[], to?: string[] }) => {
+      await apiClient.post(`/tickets/${ticketId}/messages`, { bodyText, cc, to });
     },
     onSuccess: () => {
       setReply('');
@@ -117,6 +163,19 @@ export default function TicketTimeline({ ticketId }: { ticketId: string }) {
     }
   });
 
+  const assignSubDepartmentMutation = useMutation({
+    mutationFn: async (subDepartmentId: string) => {
+      await apiClient.put(`/tickets/${ticketId}/sub-department`, { subDepartmentId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] });
+      queryClient.invalidateQueries({ queryKey: ['ticket', ticketId, 'timeline'] });
+    },
+    onError: (err: any) => {
+      alert(`Failed to assign sub-department: ${err.response?.data?.message || err.message}`);
+    }
+  });
+
   const updateTatTypeMutation = useMutation({
     mutationFn: async (tatType: 'INTERNAL' | 'EXTERNAL') => {
       const res = await apiClient.put(`/tickets/${ticketId}/tatType`, { tatType });
@@ -160,6 +219,20 @@ export default function TicketTimeline({ ticketId }: { ticketId: string }) {
     }
   });
 
+  const toggleFlagMutation = useMutation({
+    mutationFn: async (isFlagged: boolean) => {
+      const res = await apiClient.put(`/tickets/${ticketId}/flag`, { isFlagged });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] });
+      queryClient.invalidateQueries({ queryKey: ['tickets'] }); // invalidate ticket list
+    },
+    onError: (err: any) => {
+      alert(`Failed to update flag: ${err.response?.data?.message || err.message}`);
+    }
+  });
+
   if (isTicketLoading || isTimelineLoading) {
     return <div className="h-full flex items-center justify-center">Loading ticket details...</div>;
   }
@@ -175,6 +248,20 @@ export default function TicketTimeline({ ticketId }: { ticketId: string }) {
         <div>
           <h2 className="font-bold text-sm text-slate-900 tracking-tight flex items-center gap-2">
             Ticket T-{ticketId.substring(ticketId.length - 4)}
+            <button
+              onClick={() => toggleFlagMutation.mutate(!ticketData.isFlagged)}
+              className="focus:outline-none transition-transform hover:scale-110 active:scale-95"
+              title={ticketData.isFlagged ? "Unflag ticket" : "Flag ticket"}
+              disabled={toggleFlagMutation.isPending}
+            >
+              <Star
+                className={`w-5 h-5 transition-colors ${
+                  ticketData.isFlagged
+                    ? 'text-red-500 fill-red-500'
+                    : 'text-slate-300 hover:text-slate-400'
+                }`}
+              />
+            </button>
             <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
               ticketData.status === 'CLOSED' 
                 ? 'bg-slate-100 text-slate-600 border-slate-200' 
@@ -221,12 +308,29 @@ export default function TicketTimeline({ ticketId }: { ticketId: string }) {
                   assignDepartmentMutation.mutate(e.target.value);
                 }
               }}
-              defaultValue={ticketData.departmentId?._id || ""}
+              value={ticketData.departmentId?._id || ""}
               disabled={assignDepartmentMutation.isPending || ticketData.status === 'CLOSED'}
             >
               <option value="" disabled>Assign Department...</option>
               {departments.map((dept: any) => (
                 <option key={dept._id} value={dept._id}>{dept.name}</option>
+              ))}
+            </select>
+          )}
+          {isAdmin && subDepartments && ticketData.departmentId && (
+            <select
+              className="px-2 py-1.5 text-xs font-semibold rounded-md border border-slate-300 bg-white text-slate-700 shadow-2xs"
+              onChange={(e) => {
+                if(e.target.value) {
+                  assignSubDepartmentMutation.mutate(e.target.value);
+                }
+              }}
+              value={ticketData.subDepartmentId?._id || ticketData.subDepartmentId || ""}
+              disabled={assignSubDepartmentMutation.isPending || ticketData.status === 'CLOSED' || subDepartments.length === 0}
+            >
+              <option value="" disabled>{subDepartments.length === 0 ? 'No Sub-Departments' : 'Assign Sub-Dept...'}</option>
+              {subDepartments.map((sub: any) => (
+                <option key={sub._id} value={sub._id}>{sub.name}</option>
               ))}
             </select>
           )}
@@ -270,31 +374,55 @@ export default function TicketTimeline({ ticketId }: { ticketId: string }) {
             </select>
           )}
           {ticketData.status !== 'CLOSED' && (
-            <select
-              className="px-2 py-1.5 text-xs font-semibold rounded-md border border-slate-300 bg-white text-slate-700 shadow-2xs cursor-pointer"
-              onChange={(e) => {
-                if (e.target.value) {
-                  if (e.target.value === 'CLOSED') {
-                    if(confirm('Are you sure you want to close this ticket?')) {
-                      updateStatusMutation.mutate('CLOSED');
-                    }
-                  } else {
-                    updateStatusMutation.mutate(e.target.value);
+            <div className="flex items-center gap-2">
+              {(() => {
+                let firstStatusChangerName = '';
+                if (timelineData) {
+                  const statusChangeActivity = timelineData.find((item: any) => item.type === 'ACTIVITY' && item.data?.action === 'STATUS_CHANGED' && item.data?.actorId);
+                  if (statusChangeActivity) {
+                    const actor = statusChangeActivity.data.actorId;
+                    firstStatusChangerName = `${actor.firstName || ''} ${actor.lastName || ''}`.trim() || actor.email || 'Agent';
                   }
                 }
-              }}
-              value={ticketData.status}
-              disabled={updateStatusMutation.isPending}
-            >
-              <option value="OPEN">Open</option>
-              <option value="IN_PROGRESS">In Progress</option>
-              <option value="PENDING_CUSTOMER">Pending Customer</option>
-              <option value="PENDING_APPROVAL">Waiting on Approval</option>
-              <option value="PENDING_DOCUMENT_CLARIFICATION">Waiting on Documents</option>
-              <option value="RESOLVED">Resolved</option>
-              <option value="CLOSED">Closed</option>
-            </select>
+                return firstStatusChangerName ? (
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    Changed by <span className="font-semibold text-slate-700">{firstStatusChangerName}</span>
+                  </span>
+                ) : null;
+              })()}
+              <select
+                className="px-2 py-1.5 text-xs font-semibold rounded-md border border-slate-300 bg-white text-slate-700 shadow-2xs cursor-pointer"
+                onChange={(e) => {
+                  if (e.target.value) {
+                    if (e.target.value === 'CLOSED') {
+                      if(confirm('Are you sure you want to close this ticket?')) {
+                        updateStatusMutation.mutate('CLOSED');
+                      }
+                    } else {
+                      updateStatusMutation.mutate(e.target.value);
+                    }
+                  }
+                }}
+                value={ticketData.status}
+                disabled={updateStatusMutation.isPending}
+              >
+                <option value="OPEN">Open</option>
+                <option value="IN_PROGRESS">In Progress</option>
+                <option value="PENDING_CUSTOMER">Pending Customer</option>
+                <option value="PENDING_APPROVAL">Waiting on Approval</option>
+                <option value="PENDING_DOCUMENT_CLARIFICATION">Waiting on Documents</option>
+                <option value="RESOLVED">Resolved</option>
+                <option value="CLOSED">Closed</option>
+              </select>
+            </div>
           )}
+          <button
+            onClick={() => window.open(`/print/${ticketId}`, '_blank')}
+            className="px-2 py-1.5 text-xs font-semibold rounded-md border border-slate-300 bg-white text-slate-700 shadow-2xs cursor-pointer hover:bg-slate-50 flex items-center gap-1"
+            title="Print Ticket Thread"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+          </button>
         </div>
       </div>
 
@@ -345,7 +473,19 @@ export default function TicketTimeline({ ticketId }: { ticketId: string }) {
                     {new Date(data.receivedAt || data.createdAt).toLocaleTimeString()}
                   </span>
                 </div>
-                <p className="text-xs leading-relaxed whitespace-pre-wrap">{data.bodyText || data.bodyHtml}</p>
+                {data.cc && data.cc.length > 0 && (
+                  <div className={`mb-2 text-[10px] font-medium ${isInbound ? 'text-slate-500' : 'text-slate-300'}`}>
+                    CC: {data.cc.join(', ')}
+                  </div>
+                )}
+                {data.bodyHtml ? (
+                  <div 
+                    className="text-xs leading-relaxed prose prose-sm max-w-none prose-p:my-1 overflow-x-auto custom-scrollbar" 
+                    dangerouslySetInnerHTML={{ __html: data.bodyHtml }} 
+                  />
+                ) : (
+                  <p className="text-xs leading-relaxed whitespace-pre-wrap break-words">{data.bodyText}</p>
+                )}
                 {data.attachments && data.attachments.length > 0 && (
                   <div className="mt-2 space-y-1.5 border-t border-slate-200/50 pt-2">
                     {data.attachments.map((att: any) => (
@@ -371,17 +511,55 @@ export default function TicketTimeline({ ticketId }: { ticketId: string }) {
 
       {/* Reply Editor */}
       <div className="p-4 border-t border-slate-200 bg-white">
-        {ticketData.status !== 'IN_PROGRESS' && ticketData.status !== 'CLOSED' && (
+        {(ticketData.status !== 'IN_PROGRESS' || !ticketData.tatType || !ticketData.subDepartmentId) && ticketData.status !== 'CLOSED' && (
           <div className="mb-2 p-2 bg-amber-50 border border-amber-200 rounded-md text-xs text-amber-800 font-medium text-center">
-            You must change the status to "In Progress" in order to reply to this ticket.
+            You must change the status to "In Progress", assign a TAT, and select a Sub-Department in order to reply to this ticket.
           </div>
         )}
+        <div className="flex gap-4 mb-2">
+          <label className="flex items-center gap-1.5 text-xs text-slate-700 font-medium cursor-pointer">
+            <input 
+              type="radio" 
+              name="replyType" 
+              checked={replyType === 'REPLY_ALL'} 
+              onChange={() => setReplyType('REPLY_ALL')}
+              className="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500 border-slate-300"
+            />
+            Reply All (with CC)
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-slate-700 font-medium cursor-pointer">
+            <input 
+              type="radio" 
+              name="replyType" 
+              checked={replyType === 'REPLY'} 
+              onChange={() => setReplyType('REPLY')}
+              className="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500 border-slate-300"
+            />
+            Reply (Sender only)
+          </label>
+        </div>
+        <input
+          type="text"
+          placeholder="To (comma-separated emails)"
+          className="w-full mb-2 p-2 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 shadow-2xs placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:bg-slate-50 disabled:text-slate-500"
+          value={toEmails}
+          onChange={(e) => setToEmails(e.target.value)}
+          disabled={sendReplyMutation.isPending || ticketData.status !== 'IN_PROGRESS' || !ticketData.tatType || !ticketData.subDepartmentId}
+        />
+        <input
+          type="text"
+          placeholder="CC (comma-separated emails)"
+          className="w-full mb-2 p-2 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 shadow-2xs placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:bg-slate-50 disabled:text-slate-500"
+          value={ccEmails}
+          onChange={(e) => setCcEmails(e.target.value)}
+          disabled={sendReplyMutation.isPending || ticketData.status !== 'IN_PROGRESS' || !ticketData.tatType || !ticketData.subDepartmentId}
+        />
         <textarea
           className="w-full min-h-[80px] p-3 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 shadow-2xs placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400 resize-none disabled:bg-slate-50 disabled:text-slate-500"
-          placeholder={ticketData.status === 'IN_PROGRESS' ? "Type your reply here..." : "Status must be 'In Progress' to reply"}
+          placeholder={(ticketData.status === 'IN_PROGRESS' && ticketData.tatType && ticketData.subDepartmentId) ? "Type your reply here..." : "Status must be 'In Progress', TAT assigned, and Sub-Department assigned to reply"}
           value={reply}
           onChange={(e) => setReply(e.target.value)}
-          disabled={sendReplyMutation.isPending || ticketData.status !== 'IN_PROGRESS'}
+          disabled={sendReplyMutation.isPending || ticketData.status !== 'IN_PROGRESS' || !ticketData.tatType || !ticketData.subDepartmentId}
         />
         <div className="mt-3 flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -407,8 +585,12 @@ export default function TicketTimeline({ ticketId }: { ticketId: string }) {
             )}
           </div>
           <button
-            onClick={() => sendReplyMutation.mutate(reply)}
-            disabled={!reply.trim() || sendReplyMutation.isPending || ticketData.status !== 'IN_PROGRESS'}
+            onClick={() => {
+              const ccArray = ccEmails ? ccEmails.split(',').map(e => e.trim()).filter(e => e) : [];
+              const toArray = toEmails ? toEmails.split(',').map(e => e.trim()).filter(e => e) : [];
+              sendReplyMutation.mutate({ bodyText: reply, cc: ccArray, to: toArray });
+            }}
+            disabled={!reply.trim() || sendReplyMutation.isPending || ticketData.status !== 'IN_PROGRESS' || !ticketData.tatType || !ticketData.subDepartmentId}
             className="px-4 py-1.5 bg-slate-900 text-white rounded-md text-xs font-semibold hover:bg-slate-800 transition-colors shadow-2xs disabled:opacity-50 disabled:hover:bg-slate-900 flex items-center gap-1.5"
           >
             <Send className="w-3.5 h-3.5" />

@@ -14,12 +14,15 @@ async function createAdmin() {
 
   // CLI Arguments or defaults
   const args = process.argv.slice(2);
-  const email = args[0] || 'admin@paruluniversity.ac.in';
+  const email = args[0] || 'nikhil.patil46327@paruluniversity.ac.in';
   const password = args[1] || 'Admin@1234!';
   const firstName = args[2] || 'Admin';
   const lastName = args[3] || 'User';
+  
+  // By default, the specified email gets SUPER_ADMIN, anyone else gets ADMIN unless passed in.
+  const targetRoleName = args[4] || (email === 'nikhil.patil46327@paruluniversity.ac.in' ? 'SUPER_ADMIN' : 'ADMIN');
 
-  console.log(`Creating Admin user: ${email}...`);
+  console.log(`Creating ${targetRoleName} user: ${email}...`);
 
   // Ensure default Department exists
   let department = await db.collection('departments').findOne({ name: 'System Administration' });
@@ -48,6 +51,21 @@ async function createAdmin() {
     console.log('Created ADMIN role.');
   }
 
+  // Ensure SUPER_ADMIN role exists
+  let superAdminRole = await db.collection('roles').findOne({ name: 'SUPER_ADMIN' });
+  if (!superAdminRole) {
+    const roleRes = await db.collection('roles').insertOne({
+      name: 'SUPER_ADMIN',
+      description: 'Super Administrator with absolute full access permissions',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    superAdminRole = { _id: roleRes.insertedId, name: 'SUPER_ADMIN' };
+    console.log('Created SUPER_ADMIN role.');
+  }
+
+  const roleToAssign = targetRoleName === 'SUPER_ADMIN' ? superAdminRole : adminRole;
+
   // Hash password
   const salt = await bcrypt.genSalt(12);
   const passwordHash = await bcrypt.hash(password, salt);
@@ -60,27 +78,27 @@ async function createAdmin() {
       { 
         $set: { 
           passwordHash,
-          roleId: adminRole._id,
+          roleId: roleToAssign._id,
           departmentId: department._id,
           isActive: true,
           updatedAt: new Date()
         } 
       }
     );
-    console.log(`Successfully updated existing user ${email} with ADMIN role, department & new password!`);
+    console.log(`Successfully updated existing user ${email} with ${targetRoleName} role, department & new password!`);
   } else {
     await db.collection('users').insertOne({
       email,
       passwordHash,
       firstName,
       lastName,
-      roleId: adminRole._id,
+      roleId: roleToAssign._id,
       departmentId: department._id,
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date()
     });
-    console.log(`Successfully created new ADMIN user ${email}!`);
+    console.log(`Successfully created new ${targetRoleName} user ${email}!`);
   }
 
   console.log(`\n--- Admin Credentials ---`);

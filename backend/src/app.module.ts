@@ -21,6 +21,7 @@ import { HealthController } from './health.controller';
 import { LogsModule } from './modules/logs/logs.module';
 
 import { ActivityLoggerInterceptor } from './modules/logs/logs.interceptor';
+import { FeedbackModule } from './modules/feedback/feedback.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { ActivityLoggerInterceptor } from './modules/logs/logs.interceptor';
     TemplatesModule,
     TerminusModule,
     LogsModule,
+    FeedbackModule,
   ],
   controllers: [HealthController],
   providers: [

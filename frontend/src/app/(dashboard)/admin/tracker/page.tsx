@@ -107,6 +107,30 @@ export default function TicketTrackerPage() {
             </div>
           </div>
 
+          {/* Feedback Status */}
+          {result.feedback && result.feedback.tokenSent && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-blue-900">Customer Feedback</h3>
+                <p className="text-sm text-blue-800 mt-1">
+                  {result.feedback.status === 'PENDING' && 'A feedback link has been sent to the customer and is awaiting their response.'}
+                  {result.feedback.status === 'EXPIRED' && 'The feedback link sent to the customer has expired.'}
+                  {result.feedback.status === 'COMPLETED' && 'The customer has submitted their feedback.'}
+                </p>
+              </div>
+              {result.feedback.review && (
+                <div className="text-right">
+                  <div className="text-2xl text-yellow-500">
+                    {'★'.repeat(result.feedback.review.rating)}{'☆'.repeat(5 - result.feedback.review.rating)}
+                  </div>
+                  {result.feedback.review.comment && (
+                    <p className="text-sm text-muted-foreground italic max-w-xs mt-1 truncate">"{result.feedback.review.comment}"</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* AI Tags */}
           {result.ticket.aiClassification?.tags?.length > 0 && (
             <div className="flex items-center gap-2">
@@ -143,7 +167,14 @@ export default function TicketTrackerPage() {
                         <span className="font-semibold text-xs">{data.from}</span>
                         <span className="text-xs text-muted-foreground">{new Date(data.receivedAt || data.createdAt).toLocaleTimeString()}</span>
                       </div>
-                      <p className="text-sm whitespace-pre-wrap">{data.bodyText || data.bodyHtml}</p>
+                      {data.bodyHtml ? (
+                        <div 
+                          className="text-sm prose prose-sm max-w-none" 
+                          dangerouslySetInnerHTML={{ __html: data.bodyHtml }} 
+                        />
+                      ) : (
+                        <p className="text-sm whitespace-pre-wrap">{data.bodyText}</p>
+                      )}
                     </div>
                   );
                 }

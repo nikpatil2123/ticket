@@ -59,7 +59,7 @@ export class GoogleAuthService {
 
     await this.settingsModel.findOneAndUpdate(
       { key: 'global_gmail_connected_at' },
-      { $set: { value: { timestamp: Date.now() } } },
+      { $setOnInsert: { value: { timestamp: Date.now() } } },
       { upsert: true, returnDocument: 'after' },
     );
 
@@ -139,8 +139,10 @@ export class GoogleAuthService {
           scopes: tokens.scope ? tokens.scope.split(' ') : [],
           isActive: true,
           status: GmailConnectionStatus.CONNECTED,
-          gmailConnectedAt: new Date(),
         },
+        $setOnInsert: {
+          gmailConnectedAt: new Date(),
+        }
       },
       { upsert: true, returnDocument: 'after' }
     );

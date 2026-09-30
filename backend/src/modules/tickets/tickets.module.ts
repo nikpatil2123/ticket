@@ -7,6 +7,7 @@ import { Ticket, TicketSchema } from './schemas/ticket.schema';
 import { Message, MessageSchema } from './schemas/message.schema';
 import { ActivityLog, ActivityLogSchema } from './schemas/activity-log.schema';
 import { AuthModule } from '../auth/auth.module';
+import { FeedbackModule } from '../feedback/feedback.module';
 
 import {
   Attachment,
@@ -16,6 +17,7 @@ import { SettingsModule } from '../settings/settings.module';
 
 @Module({
   imports: [
+    FeedbackModule,
     MongooseModule.forFeature([
       { name: Ticket.name, schema: TicketSchema },
       { name: Message.name, schema: MessageSchema },

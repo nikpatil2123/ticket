@@ -43,7 +43,7 @@ export default function LoginPage() {
       localStorage.setItem('user', JSON.stringify(data.user));
       
       // Redirect based on role
-      if (data.user.role === 'ADMIN') {
+      if (data.user.role === 'ADMIN' || data.user.role === 'SUPER_ADMIN') {
         router.push('/admin/automation'); // or /admin/team
       } else {
         router.push('/team/triage');

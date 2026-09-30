@@ -35,7 +35,7 @@ export default function AnalyticsDashboardPage() {
 
   if (!statsData) return null;
 
-  const { stats, topSenders = [], departmentStats = [] } = statsData;
+  const { stats, topSenders = [], departmentStats = [], subDepartmentStats = [] } = statsData;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -197,7 +197,7 @@ export default function AnalyticsDashboardPage() {
       )}
 
       {/* Additional Stats Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Top Senders */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
           <div className="p-4 border-b border-slate-200 bg-slate-50">
@@ -250,6 +250,36 @@ export default function AnalyticsDashboardPage() {
                     <tr key={dept._id || i} className="hover:bg-slate-50/50">
                       <td className="px-4 py-3 text-slate-900 font-medium truncate max-w-[200px]" title={dept.departmentName}>{dept.departmentName}</td>
                       <td className="px-4 py-3 text-right font-bold text-indigo-600">{dept.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        {/* Sub-Department Stats */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+          <div className="p-4 border-b border-slate-200 bg-slate-50">
+            <h3 className="font-bold text-sm text-slate-800">Tickets by Sub-Department</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Distribution of tickets across sub-departments</p>
+          </div>
+          <div className="flex-1 p-0 overflow-y-auto max-h-80">
+            {subDepartmentStats.length === 0 ? (
+              <div className="p-8 text-center text-slate-500 text-sm">No sub-department data available.</div>
+            ) : (
+              <table className="w-full text-left text-sm text-slate-600">
+                <thead className="text-xs text-slate-500 bg-slate-50 sticky top-0 border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-2 font-medium">Sub-Department</th>
+                    <th className="px-4 py-2 font-medium text-right w-24">Tickets</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {subDepartmentStats.map((sub: any, i: number) => (
+                    <tr key={sub._id || i} className="hover:bg-slate-50/50">
+                      <td className="px-4 py-3 text-slate-900 font-medium truncate max-w-[200px]" title={sub.subDepartmentName}>{sub.subDepartmentName}</td>
+                      <td className="px-4 py-3 text-right font-bold text-indigo-600">{sub.count}</td>
                     </tr>
                   ))}
                 </tbody>
